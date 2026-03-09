@@ -225,7 +225,8 @@ func simplify2DForAI(htmlContent string) string {
 // ParseCSVFromResponse 从 AI 响应中解析 CSV
 func ParseCSVFromResponse(response string) (courseCSV, activityCSV string) {
 	// 使用正则表达式提取 CSV 代码块
-	courseRe := regexp.MustCompile("```csv\\s*\\n(.*?)\\n```")
+	// 修改：使用 (?s) 开启多行模式，\n? 使结尾换行符可选
+	courseRe := regexp.MustCompile("(?s)```csv\\s*\\n(.*?)\\n?```")
 	matches := courseRe.FindAllStringSubmatch(response, -1)
 
 	if len(matches) >= 1 {
