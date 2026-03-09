@@ -191,6 +191,7 @@ func runValidate(cfg *config.Config) {
 	validator := validate.NewValidator(
 		cfg.Paths.TempSimplified,
 		cfg.Paths.ErrorLog,
+		cfg.Semester.Code, // 传入配置的学期代码
 	)
 
 	results, err := validator.Process()
@@ -214,6 +215,7 @@ func runSplit(cfg *config.Config) {
 		cfg.Paths.TempSimplified,
 		cfg.Paths.TempSplit2D,
 		cfg.Paths.TempSplitList,
+		cfg.Semester.Code, // 传入配置的学期代码
 	)
 
 	results, err := splitter.Process()

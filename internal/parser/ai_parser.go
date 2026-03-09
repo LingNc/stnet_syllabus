@@ -98,6 +98,12 @@ func (p *AI2DParser) Process() ([]AIResult, error) {
 
 			if result.Success {
 				fmt.Printf("✓ AI 解析完成: %s\n", filepath.Base(filePath))
+				if result.CourseCSV != "" {
+					fmt.Printf("  课程: %s\n", filepath.Base(result.CourseCSV))
+				}
+				if result.ActivityCSV != "" {
+					fmt.Printf("  环节: %s\n", filepath.Base(result.ActivityCSV))
+				}
 			} else {
 				fmt.Printf("✗ AI 解析失败: %s - %s\n", filepath.Base(filePath), result.Error)
 			}

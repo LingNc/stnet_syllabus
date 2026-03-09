@@ -13,9 +13,10 @@ import (
 
 // Splitter 拆分器
 type Splitter struct {
-	InputDir    string
-	OutputDir2D string
+	InputDir      string
+	OutputDir2D   string
 	OutputDirList string
+	SemesterCode  string // 从 config 传入的学期代码
 }
 
 // SplitResult 拆分结果
@@ -32,11 +33,12 @@ type SplitResult struct {
 }
 
 // NewSplitter 创建拆分器
-func NewSplitter(inputDir, outputDir2D, outputDirList string) *Splitter {
+func NewSplitter(inputDir, outputDir2D, outputDirList, semesterCode string) *Splitter {
 	return &Splitter{
 		InputDir:      inputDir,
 		OutputDir2D:   outputDir2D,
 		OutputDirList: outputDirList,
+		SemesterCode:  semesterCode,
 	}
 }
 
@@ -119,6 +121,11 @@ func (s *Splitter) SplitFile(filePath string) SplitResult {
 	// 检测格式
 	format := detectFormat(htmlContent)
 	result.Format = format
+
+	// 对于 2D 表格，直接使用 config 中的学期代码
+	if format == "2d" && s.SemesterCode != "" {
+		result.SemesterCode = s.SemesterCode
+	}
 
 	// 根据格式进行拆分
 	switch format {

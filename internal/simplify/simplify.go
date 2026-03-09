@@ -222,19 +222,6 @@ func simplify2DHTML(htmlContent string) string {
 	})
 	result.WriteString("</table>\n\n")
 
-	// 提取学期信息（从隐藏字段）
-	xn := doc.Find("input#xn").AttrOr("value", "")
-	xq := doc.Find("input#xq_m").AttrOr("value", "")
-	if xn != "" && xq != "" {
-		semesterText := fmt.Sprintf("%s-"+"%s"+"学年"+"第%s学期", xn, fmt.Sprintf("%d", mustInt(xn)+1), xq)
-		if xq == "1" {
-			semesterText = fmt.Sprintf("%s-%s学年第一学期", xn, fmt.Sprintf("%d", mustInt(xn)+1))
-		} else if xq == "2" {
-			semesterText = fmt.Sprintf("%s-%s学年第二学期", xn, fmt.Sprintf("%d", mustInt(xn)+1))
-		}
-		result.WriteString(fmt.Sprintf("<!-- SEMESTER: %s -->\n", semesterText))
-	}
-
 	// 提取课表主体
 	result.WriteString("<!-- TYPE: 2D_TABLE -->\n")
 	result.WriteString("<table class=\"schedule\">\n")
@@ -307,17 +294,6 @@ func cleanWhitespace(str string) string {
 	// 合并多个空格
 	fields := strings.Fields(str)
 	return strings.Join(fields, " ")
-}
-
-// mustInt 将字符串转换为整数，失败返回 0
-func mustInt(s string) int {
-	n := 0
-	for _, ch := range s {
-		if ch >= '0' && ch <= '9' {
-			n = n*10 + int(ch-'0')
-		}
-	}
-	return n
 }
 
 // decodeGBK 将 GBK 编码的字节转换为 UTF-8 字符串

@@ -13,9 +13,10 @@ import (
 
 // Validator 验证器
 type Validator struct {
-	InputDir  string
-	ErrorLog  string
-	errors    []string
+	InputDir     string
+	ErrorLog     string
+	errors       []string
+	SemesterCode string // 期望的学期代码
 }
 
 // ValidationResult 验证结果
@@ -30,11 +31,12 @@ type ValidationResult struct {
 }
 
 // NewValidator 创建验证器
-func NewValidator(inputDir, errorLog string) *Validator {
+func NewValidator(inputDir, errorLog, semesterCode string) *Validator {
 	return &Validator{
-		InputDir: inputDir,
-		ErrorLog: errorLog,
-		errors:   []string{},
+		InputDir:     inputDir,
+		ErrorLog:     errorLog,
+		errors:       []string{},
+		SemesterCode: semesterCode,
 	}
 }
 
@@ -76,6 +78,15 @@ func (v *Validator) ValidateFile(filePath string) ValidationResult {
 		result.Error = fmt.Sprintf("数据一致性验证失败: %v", err)
 		v.logError(fileName, result.Error)
 		return result
+	}
+
+	// 对于 list 格式，校验学期代码与配置是否一致
+	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) || strings.Contains(htmlContent, "上课班级代码") {
+		if v.SemesterCode != "" && result.SemesterCode != "" && result.SemesterCode != v.SemesterCode {
+			warning := fmt.Sprintf("警告: 文件中学期代码 %s 与配置 %s 不一致", result.SemesterCode, v.SemesterCode)
+			fmt.Printf("  ⚠ %s\n", warning)
+			v.logError(fileName, warning)
+		}
 	}
 
 	result.Valid = true

@@ -147,13 +147,31 @@ func (p *Processor) LoadMapping() ([]MappingEntry, error) {
 				}
 			}
 
+			name := strings.TrimSpace(row[2])
+			fileName := strings.TrimSpace(row[4])
+
+			// 如果名字为空，尝试从文件名中提取
+			if name == "" && fileName != "" {
+				// 从文件名提取（去除扩展名）
+				baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+				// 如果文件名包含下划线，取第一部分作为名字
+				if idx := strings.Index(baseName, "_"); idx > 0 {
+					name = baseName[:idx]
+				} else {
+					name = baseName
+				}
+				fmt.Printf("警告: 第 %d 行姓名为空，从文件名推断为: %s\n", i+1, name)
+			}
+
 			entry := MappingEntry{
-				Name:      strings.TrimSpace(row[2]),
+				Name:      name,
 				StudentID: studentID,
-				FileName:  strings.TrimSpace(row[4]),
+				FileName:  fileName,
 			}
 			if entry.Name != "" && entry.StudentID != "" {
 				entries = append(entries, entry)
+			} else {
+				fmt.Printf("警告: 第 %d 行数据不完整（姓名: %s, 学号: %s），跳过\n", i+1, entry.Name, entry.StudentID)
 			}
 		}
 	}
