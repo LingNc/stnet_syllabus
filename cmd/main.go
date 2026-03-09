@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"stnet_syllabus/internal/aggregate"
 	"stnet_syllabus/internal/config"
@@ -22,12 +23,44 @@ import (
 	"stnet_syllabus/internal/weekly"
 )
 
+// errorLog 全局错误日志文件
+var errorLog *os.File
+
+// initErrorLog 初始化错误日志
+func initErrorLog(cfg *config.Config) error {
+	errorLogPath := filepath.Join(cfg.Paths.Output, "error.log")
+	f, err := os.OpenFile(errorLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	errorLog = f
+	logError("=== 错误日志开始 ===")
+	logError("时间: %s", time.Now().Format("2026-03-09 15:04:05"))
+	return nil
+}
+
+// closeErrorLog 关闭错误日志
+func closeErrorLog() {
+	if errorLog != nil {
+		logError("=== 错误日志结束 ===")
+		errorLog.Close()
+	}
+}
+
+// logError 记录错误到日志
+func logError(format string, args ...interface{}) {
+	if errorLog != nil {
+		timestamp := time.Now().Format("15:04:05")
+		fmt.Fprintf(errorLog, "[%s] %s\n", timestamp, fmt.Sprintf(format, args...))
+	}
+}
+
 func main() {
 	// 解析命令行参数
 	var (
-		configFile  = flag.String("config", "config/config.yaml", "配置文件路径")
-		step        = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel")
-		skipAI      = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
+		configFile = flag.String("config", "config/config.yaml", "配置文件路径")
+		step       = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel")
+		skipAI     = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
 	)
 	flag.Parse()
 
@@ -43,6 +76,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "创建目录失败: %v\n", err)
 		os.Exit(1)
 	}
+
+	// 初始化错误日志
+	if err := initErrorLog(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "初始化错误日志失败: %v\n", err)
+	}
+	defer closeErrorLog()
 
 	// 根据步骤执行
 	switch *step {
@@ -105,6 +144,7 @@ func runPreprocess(cfg *config.Config) {
 	entries, err := os.ReadDir(cfg.Paths.Input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "读取输入目录失败: %v\n", err)
+		logError("读取输入目录失败: %v", err)
 		return
 	}
 
@@ -117,6 +157,7 @@ func runPreprocess(cfg *config.Config) {
 
 	if mappingFile == "" {
 		fmt.Println("警告: 未找到映射表文件，跳过预处理")
+		logError("未找到映射表文件，跳过预处理")
 		return
 	}
 
@@ -128,6 +169,7 @@ func runPreprocess(cfg *config.Config) {
 
 	if err := processor.Process(); err != nil {
 		fmt.Fprintf(os.Stderr, "预处理失败: %v\n", err)
+		logError("预处理失败: %v", err)
 	}
 }
 
@@ -140,6 +182,7 @@ func runSimplify(cfg *config.Config) {
 
 	if err := simplifier.Process(); err != nil {
 		fmt.Fprintf(os.Stderr, "HTML 精简失败: %v\n", err)
+		logError("HTML 精简失败: %v", err)
 	}
 }
 
@@ -150,8 +193,18 @@ func runValidate(cfg *config.Config) {
 		cfg.Paths.ErrorLog,
 	)
 
-	if _, err := validator.Process(); err != nil {
+	results, err := validator.Process()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "数据验证失败: %v\n", err)
+		logError("数据验证失败: %v", err)
+		return
+	}
+
+	// 记录验证错误
+	for _, r := range results {
+		if r.Error != "" {
+			logError("验证失败 [%s]: %s", r.FilePath, r.Error)
+		}
 	}
 }
 
@@ -163,8 +216,18 @@ func runSplit(cfg *config.Config) {
 		cfg.Paths.TempSplitList,
 	)
 
-	if _, err := splitter.Process(); err != nil {
+	results, err := splitter.Process()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "数据拆分失败: %v\n", err)
+		logError("数据拆分失败: %v", err)
+		return
+	}
+
+	// 记录拆分错误
+	for _, r := range results {
+		if r.Error != "" {
+			logError("拆分失败 [%s]: %s", r.FilePath, r.Error)
+		}
 	}
 }
 
@@ -176,8 +239,17 @@ func runParse(cfg *config.Config, skipAI bool) {
 		cfg.Paths.CSVNormalized,
 	)
 
-	if _, err := listParser.Process(); err != nil {
+	results, err := listParser.Process()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "列表格式解析失败: %v\n", err)
+		logError("列表格式解析失败: %v", err)
+	} else {
+		// 记录解析错误
+		for _, r := range results {
+			if r.Error != "" {
+				logError("列表解析失败 [%s]: %s", r.InputFile, r.Error)
+			}
+		}
 	}
 
 	// 解析二维表（AI）
@@ -185,6 +257,7 @@ func runParse(cfg *config.Config, skipAI bool) {
 		apiKey, err := config.GetAPIKey(filepath.Dir(cfg.Paths.Input) + "/config")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "读取 API 密钥失败: %v\n", err)
+			logError("读取 API 密钥失败: %v", err)
 			fmt.Println("跳过 AI 解析，仅使用列表格式结果")
 			return
 		}
@@ -205,8 +278,17 @@ func runParse(cfg *config.Config, skipAI bool) {
 			cfg.AI.Concurrency,
 		)
 
-		if _, err := aiParser.Process(); err != nil {
+		aiResults, err := aiParser.Process()
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "AI 解析失败: %v\n", err)
+			logError("AI 解析失败: %v", err)
+		} else {
+			// 记录 AI 解析错误
+			for _, r := range aiResults {
+				if r.Error != "" {
+					logError("AI 解析失败 [%s]: %s", r.InputFile, r.Error)
+				}
+			}
 		}
 	}
 }
@@ -222,6 +304,7 @@ func runAggregate(cfg *config.Config) {
 
 	if err := aggregator.Process(); err != nil {
 		fmt.Fprintf(os.Stderr, "空闲时间聚合失败: %v\n", err)
+		logError("空闲时间聚合失败: %v", err)
 	}
 }
 
@@ -232,13 +315,24 @@ func runWeekly(cfg *config.Config) {
 	weeklyDir := filepath.Join(cfg.Paths.Output, "weekly")
 	if err := os.MkdirAll(weeklyDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "创建周切片目录失败: %v\n", err)
+		logError("创建周切片目录失败: %v", err)
 		return
 	}
 
 	slicer := weekly.NewSlicer(machineCSV, weeklyDir, cfg.Semester.TotalWeeks)
 
-	if _, err := slicer.Process(); err != nil {
+	results, err := slicer.Process()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "周次切片失败: %v\n", err)
+		logError("周次切片失败: %v", err)
+		return
+	}
+
+	// 记录切片错误
+	for _, r := range results {
+		if r.Error != "" {
+			logError("周次切片失败 [第%d周]: %s", r.Week, r.Error)
+		}
 	}
 }
 
@@ -255,15 +349,22 @@ func runExcel(cfg *config.Config) {
 	// 生成主报表（包含汇总和每周）
 	if err := generator.Generate(); err != nil {
 		fmt.Fprintf(os.Stderr, "生成主 Excel 报表失败: %v\n", err)
+		logError("生成主 Excel 报表失败: %v", err)
+		return
 	}
 
 	// 单独转换每周 CSV 为 Excel
 	entries, err := os.ReadDir(weeklyDir)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".csv") {
-				csvFile := filepath.Join(weeklyDir, entry.Name())
-				generator.ConvertCSVToExcel(csvFile)
+	if err != nil {
+		logError("读取周切片目录失败: %v", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".csv") {
+			csvFile := filepath.Join(weeklyDir, entry.Name())
+			if err := generator.ConvertCSVToExcel(csvFile); err != nil {
+				logError("转换 CSV 为 Excel 失败 [%s]: %v", entry.Name(), err)
 			}
 		}
 	}

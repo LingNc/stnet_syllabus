@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -197,7 +198,7 @@ func (p *ListParser) parseCourses(doc *goquery.Document) []Course {
 			}
 
 			courseName := cleanCourseName(cells.Eq(1).Text())
-			teacher := cleanCourseName(cells.Eq(5).Text())
+			teacher := cleanTeacherName(cells.Eq(5).Text())
 			timeLocStr := strings.TrimSpace(cells.Eq(9).Text())
 
 			if timeLocStr == "" {
@@ -274,7 +275,7 @@ func (p *ListParser) parseActivities(doc *goquery.Document) []Activity {
 			if teacherCol < 6 {
 				teacherCol = 6
 			}
-			teacher := cleanCourseName(cells.Eq(teacherCol).Text())
+			teacher := cleanTeacherName(cells.Eq(teacherCol).Text())
 
 			activities = append(activities, Activity{
 				Name:    activityName,
@@ -345,6 +346,15 @@ func cleanCourseName(name string) string {
 		return strings.TrimSpace(name[idx+1:])
 	}
 	return name
+}
+
+// cleanTeacherName 清理教师名，去除 [编号]
+func cleanTeacherName(name string) string {
+	name = strings.TrimSpace(name)
+	// 使用正则表达式去除 [编号] 格式的内容
+	re := regexp.MustCompile(`\s*\[\d+\]\s*`)
+	name = re.ReplaceAllString(name, " ")
+	return strings.TrimSpace(name)
 }
 
 // parseWeeks 解析周次
