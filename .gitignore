@@ -1,46 +1,18 @@
-# Binaries
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-stnet-syllabus
+# 白名单
+/*
+*/
+# !*/
 
-# Test binary
-*.test
+# 密钥文件
+api.key
 
-# Output of the go coverage tool
-*.out
+# 核心文件夹
+!config
+!example
 
-# Go workspace file
-go.work
-
-# Dependency directories
-vendor/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Build output
-/bin/
-/dist/
-
-# Sensitive local inputs (real data)
-/input/
-
-# Keep these
-!*/
-!output/*
-!config/*
+# 基本文件夹
+!*code-workspace
+!.gitignore
+!AGENTS.md
 !PLAN.md
 !RULE.md
-!AGENTS.md
-!.gitignore
