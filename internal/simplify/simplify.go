@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 // Simplifier HTML 精简器
@@ -32,7 +34,12 @@ func (s *Simplifier) SimplifyFile(inputPath, outputPath string) error {
 		return fmt.Errorf("读取文件失败: %w", err)
 	}
 
-	htmlContent := string(content)
+	// 尝试将 GBK 转换为 UTF-8
+	htmlContent, err := decodeGBK(content)
+	if err != nil {
+		// 如果转换失败，尝试直接使用原内容
+		htmlContent = string(content)
+	}
 
 	// 判断文件格式
 	format := detectFormat(htmlContent)
@@ -279,4 +286,14 @@ func cleanWhitespace(str string) string {
 	// 合并多个空格
 	fields := strings.Fields(str)
 	return strings.Join(fields, " ")
+}
+
+// decodeGBK 将 GBK 编码的字节转换为 UTF-8 字符串
+func decodeGBK(data []byte) (string, error) {
+	decoder := simplifiedchinese.GBK.NewDecoder()
+	result, _, err := transform.Bytes(decoder, data)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -17,6 +18,25 @@ type MappingEntry struct {
 	Name      string // 姓名
 	StudentID string // 学号
 	FileName  string // 原始文件名
+}
+
+// formatStudentID 格式化学号，处理科学计数法
+// 如 "5.42311010415E+11" -> "542311010415"
+func formatStudentID(id string) string {
+	id = strings.TrimSpace(id)
+
+	// 检查是否是科学计数法
+	if strings.Contains(id, "E") || strings.Contains(id, "e") {
+		// 解析为浮点数
+		var f float64
+		_, err := fmt.Sscanf(strings.ToUpper(id), "%E", &f)
+		if err == nil {
+			// 转换为整数字符串，保留完整精度
+			return strconv.FormatInt(int64(f), 10)
+		}
+	}
+
+	return id
 }
 
 // Processor 预处理器
@@ -52,15 +72,16 @@ func (p *Processor) LoadMapping() ([]MappingEntry, error) {
 
 	var entries []MappingEntry
 	// 跳过表头，从第二行开始
+	// Excel列: 提交者, 提交时间, 姓名, 学号, 文件名
 	for i, row := range rows {
 		if i == 0 {
 			continue // 跳过表头
 		}
-		if len(row) >= 3 {
+		if len(row) >= 5 {
 			entry := MappingEntry{
-				Name:      strings.TrimSpace(row[0]),
-				StudentID: strings.TrimSpace(row[1]),
-				FileName:  strings.TrimSpace(row[2]),
+				Name:      strings.TrimSpace(row[2]),
+				StudentID: formatStudentID(row[3]),
+				FileName:  strings.TrimSpace(row[4]),
 			}
 			if entry.Name != "" && entry.StudentID != "" {
 				entries = append(entries, entry)

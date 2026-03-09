@@ -178,22 +178,27 @@ func (p *ListParser) parseCourses(doc *goquery.Document) []Course {
 			return
 		}
 
-		// 确认是课程表
-		firstHeader := strings.TrimSpace(table.Find("thead td, th").First().Text())
-		if !strings.Contains(firstHeader, "上课班级代码") {
+		// 确认是课程表 - 检查表头或内容
+		firstRowText := strings.TrimSpace(table.Find("tr").First().Text())
+		if !strings.Contains(firstRowText, "上课班级代码") && !strings.Contains(firstRowText, "课程") {
 			return
 		}
 
-		// 解析每一行
-		table.Find("tbody tr").Each(func(j int, row *goquery.Selection) {
-			cells := row.Find("td")
-			if cells.Length() < 11 {
+		// 解析每一行（跳过表头）
+		table.Find("tr").Each(func(j int, row *goquery.Selection) {
+			// 跳过表头行
+			if j == 0 {
 				return
 			}
 
-			courseName := cleanCourseName(cells.Eq(2).Text())
-			teacher := cleanCourseName(cells.Eq(6).Text())
-			timeLocStr := strings.TrimSpace(cells.Eq(10).Text())
+			cells := row.Find("td")
+			if cells.Length() < 10 {
+				return
+			}
+
+			courseName := cleanCourseName(cells.Eq(1).Text())
+			teacher := cleanCourseName(cells.Eq(5).Text())
+			timeLocStr := strings.TrimSpace(cells.Eq(9).Text())
 
 			if timeLocStr == "" {
 				// 无时间地点（如网络课）
@@ -243,23 +248,33 @@ func (p *ListParser) parseActivities(doc *goquery.Document) []Activity {
 			return
 		}
 
-		// 确认是环节表
-		firstHeader := strings.TrimSpace(table.Find("thead td, th").First().Text())
-		if !strings.Contains(firstHeader, "环节") {
+		// 确认是环节表 - 检查表头或内容
+		firstRowText := strings.TrimSpace(table.Find("tr").First().Text())
+		if !strings.Contains(firstRowText, "环节") {
 			return
 		}
 
-		// 解析每一行
-		table.Find("tbody tr").Each(func(j int, row *goquery.Selection) {
+		// 解析每一行（跳过表头）
+		table.Find("tr").Each(func(j int, row *goquery.Selection) {
+			// 跳过表头行
+			if j == 0 {
+				return
+			}
+
 			cells := row.Find("td")
-			if cells.Length() < 8 {
+			if cells.Length() < 6 {
 				return
 			}
 
 			activityName := cleanCourseName(cells.Eq(0).Text())
 			week := strings.TrimSpace(cells.Eq(5).Text())
 			week = parseWeeks(week)
-			teacher := cleanCourseName(cells.Eq(7).Text())
+			// 指导教师在第6列（最后一列），索引为6或cells.Length()-1
+			teacherCol := cells.Length() - 1
+			if teacherCol < 6 {
+				teacherCol = 6
+			}
+			teacher := cleanCourseName(cells.Eq(teacherCol).Text())
 
 			activities = append(activities, Activity{
 				Name:    activityName,

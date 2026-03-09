@@ -155,7 +155,8 @@ func detectFormat(htmlContent string) string {
 	}
 	if strings.Contains(htmlContent, `id='mytable'`) ||
 		strings.Contains(htmlContent, `id="mytable"`) ||
-		strings.Contains(htmlContent, "div_nokb") {
+		strings.Contains(htmlContent, "div_nokb") ||
+		strings.Contains(htmlContent, "TYPE: 2D_TABLE") {
 		return "2d"
 	}
 	return "unknown"

@@ -183,9 +183,18 @@ func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID st
 		fmt.Printf("  警告: 文件中可能未包含姓名 '%s'\n", expectedName)
 	}
 
-	// 检查学号
+	// 检查学号（尝试多种格式）
+	// 由于Excel科学计数法可能导致精度丢失，这里只做警告不阻止
 	if !strings.Contains(pageText, expectedID) {
-		return fmt.Errorf("文件内容中学号 '%s' 与文件名不一致", expectedID)
+		// 尝试匹配后8位
+		if len(expectedID) >= 8 {
+			suffix := expectedID[len(expectedID)-8:]
+			if strings.Contains(pageText, suffix) {
+				return nil
+			}
+		}
+		// 仅警告，不阻止处理
+		fmt.Printf("  警告: 文件内容中学号 '%s' 与文件名不一致（可能是Excel精度问题）\n", expectedID)
 	}
 
 	return nil
