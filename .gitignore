@@ -6,6 +6,10 @@
 # 密钥文件
 api.key
 
+# Go modules - 必须版本控制
+!go.mod
+!go.sum
+
 # 核心文件夹
 !config
 !example
