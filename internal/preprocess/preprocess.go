@@ -3,6 +3,7 @@ package preprocess
 
 import (
 	"archive/zip"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
@@ -20,6 +21,27 @@ type MappingEntry struct {
 	FileName  string // 原始文件名
 }
 
+// XlsxCell XML 单元格定义
+type XlsxCell struct {
+	R string `xml:"r,attr"`
+	V string `xml:"v"`
+}
+
+// XlsxRow XML 行定义
+type XlsxRow struct {
+	Cells []XlsxCell `xml:"c"`
+}
+
+// XlsxSheetData XML 表数据
+type XlsxSheetData struct {
+	Rows []XlsxRow `xml:"row"`
+}
+
+// XlsxWorksheet XML 工作表
+type XlsxWorksheet struct {
+	SheetData XlsxSheetData `xml:"sheetData"`
+}
+
 // formatStudentID 格式化学号，处理科学计数法
 // 如 "5.42311010415E+11" -> "542311010415"
 func formatStudentID(id string) string {
@@ -27,12 +49,44 @@ func formatStudentID(id string) string {
 
 	// 检查是否是科学计数法
 	if strings.Contains(id, "E") || strings.Contains(id, "e") {
-		// 解析为浮点数
-		var f float64
-		_, err := fmt.Sscanf(strings.ToUpper(id), "%E", &f)
-		if err == nil {
-			// 转换为整数字符串，保留完整精度
-			return strconv.FormatInt(int64(f), 10)
+		// 使用高精度计算
+		id = strings.ToUpper(id)
+
+		// 解析尾数和指数
+		var mantissa float64
+		var exp int
+		_, err := fmt.Sscanf(id, "%lE", &mantissa)
+		if err != nil {
+			return id
+		}
+
+		// 手动提取指数部分
+		parts := strings.Split(id, "E")
+		if len(parts) == 2 {
+			exp, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
+		}
+
+		// 获取尾数字符串（去掉小数点）
+		mantissaStr := strings.ReplaceAll(parts[0], ".", "")
+		mantissaStr = strings.TrimLeft(mantissaStr, "0")
+
+		// 根据指数调整
+		// 5.42311010415E+11 表示 542311010415
+		// 尾数整数部分1位，指数是11，所以结果应该是12位
+		decimalIdx := strings.Index(parts[0], ".")
+		if decimalIdx > 0 {
+			// 小数点后的位数
+			fracDigits := len(parts[0]) - decimalIdx - 1
+
+			// 重新精确计算：将尾数作为整数，然后乘以10^(exp-小数位数)
+			multiplier := exp - fracDigits
+
+			// 构造结果
+			result := mantissaStr
+			for i := 0; i < multiplier; i++ {
+				result += "0"
+			}
+			return result
 		}
 	}
 
@@ -57,6 +111,12 @@ func NewProcessor(inputDir, outputDir, mappingFile string) *Processor {
 
 // LoadMapping 从 Excel 文件加载映射表
 func (p *Processor) LoadMapping() ([]MappingEntry, error) {
+	// 首先从 XML 中读取原始学号
+	studentIDs, err := p.loadStudentIDsFromXML()
+	if err != nil {
+		fmt.Printf("警告: 从 XML 读取学号失败: %v，将使用 Excel API\n", err)
+	}
+
 	f, err := excelize.OpenFile(p.MappingFile)
 	if err != nil {
 		return nil, fmt.Errorf("打开映射表失败: %w", err)
@@ -78,9 +138,18 @@ func (p *Processor) LoadMapping() ([]MappingEntry, error) {
 			continue // 跳过表头
 		}
 		if len(row) >= 5 {
+			studentID := formatStudentID(row[3])
+
+			// 如果 XML 中有原始值，使用 XML 的值（第 i 行对应 D{i+1} 单元格）
+			if studentIDs != nil {
+				if xmlID, ok := studentIDs[i+1]; ok && xmlID != "" {
+					studentID = xmlID
+				}
+			}
+
 			entry := MappingEntry{
 				Name:      strings.TrimSpace(row[2]),
-				StudentID: formatStudentID(row[3]),
+				StudentID: studentID,
 				FileName:  strings.TrimSpace(row[4]),
 			}
 			if entry.Name != "" && entry.StudentID != "" {
@@ -90,6 +159,62 @@ func (p *Processor) LoadMapping() ([]MappingEntry, error) {
 	}
 
 	return entries, nil
+}
+
+// loadStudentIDsFromXML 直接从 xlsx 的 XML 中读取学号
+func (p *Processor) loadStudentIDsFromXML() (map[int]string, error) {
+	// 打开 xlsx 作为 zip
+	r, err := zip.OpenReader(p.MappingFile)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	// 找到 sheet1.xml
+	var sheetFile *zip.File
+	for _, f := range r.File {
+		if f.Name == "xl/worksheets/sheet1.xml" {
+			sheetFile = f
+			break
+		}
+	}
+	if sheetFile == nil {
+		return nil, fmt.Errorf("未找到 sheet1.xml")
+	}
+
+	// 读取 XML
+	rc, err := sheetFile.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析 XML
+	var worksheet XlsxWorksheet
+	if err := xml.Unmarshal(data, &worksheet); err != nil {
+		return nil, err
+	}
+
+	// 提取 D 列的学号
+	studentIDs := make(map[int]string)
+	for _, row := range worksheet.SheetData.Rows {
+		for _, cell := range row.Cells {
+			// D 列的单元格，如 D2, D3 等
+			if len(cell.R) >= 2 && cell.R[0] == 'D' {
+				rowNum, _ := strconv.Atoi(cell.R[1:])
+				if rowNum > 0 && cell.V != "" {
+					studentIDs[rowNum] = cell.V
+				}
+			}
+		}
+	}
+
+	return studentIDs, nil
 }
 
 // ExtractAndRename 解压 zip 文件并重命名 xls 文件

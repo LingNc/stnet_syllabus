@@ -107,6 +107,15 @@ func (s *Splitter) SplitFile(filePath string) SplitResult {
 
 	htmlContent := string(content)
 
+	// 如果学期代码是 unknown，从 HTML 中提取
+	if semesterCode == "unknown" {
+		semesterCode = extractSemesterCode(htmlContent)
+		if semesterCode == "" {
+			semesterCode = "unknown"
+		}
+		result.SemesterCode = semesterCode
+	}
+
 	// 检测格式
 	format := detectFormat(htmlContent)
 	result.Format = format
@@ -160,6 +169,37 @@ func detectFormat(htmlContent string) string {
 		return "2d"
 	}
 	return "unknown"
+}
+
+// extractSemesterCode 从 HTML 中提取学期代码
+func extractSemesterCode(htmlContent string) string {
+	// 首先从 SEMESTER 注释中提取
+	re := regexp.MustCompile(`<!-- SEMESTER: .*?(\d{4})-(\d{4})(?:学年)?第([一二12])学期.*?-->`)
+	matches := re.FindStringSubmatch(htmlContent)
+
+	if len(matches) >= 4 {
+		startYear := matches[1]
+		semesterNum := "0"
+		if matches[3] == "二" || matches[3] == "2" {
+			semesterNum = "1"
+		}
+		return startYear + semesterNum
+	}
+
+	// 尝试从其他位置提取
+	re = regexp.MustCompile(`(\d{4})-(\d{4})(?:学年)?第([一二12])学期`)
+	matches = re.FindStringSubmatch(htmlContent)
+
+	if len(matches) >= 4 {
+		startYear := matches[1]
+		semesterNum := "0"
+		if matches[3] == "二" || matches[3] == "2" {
+			semesterNum = "1"
+		}
+		return startYear + semesterNum
+	}
+
+	return ""
 }
 
 // splitList 拆分列表格式

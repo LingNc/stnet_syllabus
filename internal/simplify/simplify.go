@@ -135,11 +135,19 @@ func simplifyListHTML(htmlContent string) string {
 	var result strings.Builder
 	result.WriteString("<!DOCTYPE html>\n<html>\n<body>\n")
 
-	// 提取学生基础信息
+	// 提取学生基础信息和学期
 	infoDiv := doc.Find("div[group='group']").First()
+	pageTitleDiv := doc.Find("div[pagetitle='pagetitle']").First()
+
 	if infoDiv.Length() > 0 {
 		text := cleanWhitespace(infoDiv.Text())
 		result.WriteString(fmt.Sprintf("<div class=\"info\">%s</div>\n\n", text))
+	}
+
+	// 提取学期信息
+	if pageTitleDiv.Length() > 0 {
+		text := cleanWhitespace(pageTitleDiv.Text())
+		result.WriteString(fmt.Sprintf("<!-- SEMESTER: %s -->\n", text))
 	}
 
 	// 遍历所有数据表格
