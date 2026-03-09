@@ -80,13 +80,11 @@ func (v *Validator) ValidateFile(filePath string) ValidationResult {
 		return result
 	}
 
-	// 对于 list 格式，校验学期代码与配置是否一致
-	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) || strings.Contains(htmlContent, "上课班级代码") {
-		if v.SemesterCode != "" && result.SemesterCode != "" && result.SemesterCode != v.SemesterCode {
-			warning := fmt.Sprintf("警告: 文件中学期代码 %s 与配置 %s 不一致", result.SemesterCode, v.SemesterCode)
-			fmt.Printf("  ⚠ %s\n", warning)
-			v.logError(fileName, warning)
-		}
+	// 校验学期代码与配置是否一致（对 list 和 2D 表都进行）
+	if v.SemesterCode != "" && result.SemesterCode != "" && result.SemesterCode != v.SemesterCode {
+		warning := fmt.Sprintf("警告: 文件中学期代码 %s 与配置 %s 不一致", result.SemesterCode, v.SemesterCode)
+		fmt.Printf("  ⚠ %s\n", warning)
+		v.logError(fileName, warning)
 	}
 
 	result.Valid = true

@@ -180,9 +180,16 @@ func detectFormat(htmlContent string) string {
 
 // extractSemesterCode 从 HTML 中提取学期代码
 func extractSemesterCode(htmlContent string) string {
-	// 首先从 SEMESTER 注释中提取
-	re := regexp.MustCompile(`<!-- SEMESTER: .*?(\d{4})-(\d{4})(?:学年)?第([一二12])学期.*?-->`)
+	// 首先尝试从 SEMESTER_CODE 注释中提取（2D表）
+	re := regexp.MustCompile(`<!-- SEMESTER_CODE: (\d{5}) -->`)
 	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+
+	// 从 SEMESTER 注释中提取（list表）
+	re = regexp.MustCompile(`<!-- SEMESTER: .*?(\d{4})-(\d{4})(?:学年)?第([一二12])学期.*?-->`)
+	matches = re.FindStringSubmatch(htmlContent)
 
 	if len(matches) >= 4 {
 		startYear := matches[1]
@@ -300,6 +307,19 @@ func (s *Splitter) splitList(filePath string, htmlContent string, result SplitRe
 func (s *Splitter) split2D(filePath string, htmlContent string, result SplitResult) SplitResult {
 	// 二维表不实际拆分，只是复制到目标目录
 	// 实际解析由 AI 完成
+
+	// 提取学期代码并与配置对比
+	extractedCode := extractSemesterCode(htmlContent)
+	if extractedCode != "" && s.SemesterCode != "" && extractedCode != s.SemesterCode {
+		// 记录警告但不阻止处理
+		fmt.Printf("  ⚠ 警告: 2D表文件 %s 中的学期代码 %s 与配置 %s 不一致\n",
+			filepath.Base(filePath), extractedCode, s.SemesterCode)
+	}
+
+	// 如果提取到学期代码，使用提取的；否则使用配置的
+	if extractedCode != "" {
+		result.SemesterCode = extractedCode
+	}
 
 	baseName := fmt.Sprintf("%s_%s_%s", result.Name, result.StudentID, result.SemesterCode)
 	targetFile := filepath.Join(s.OutputDir2D, baseName+".xls")

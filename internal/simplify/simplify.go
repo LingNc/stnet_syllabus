@@ -222,6 +222,17 @@ func simplify2DHTML(htmlContent string) string {
 	})
 	result.WriteString("</table>\n\n")
 
+	// 提取学期信息（从隐藏字段）- xn是学年，xq_m是学期码(0或1)，直接拼接
+	xn := doc.Find("input#xn").AttrOr("value", "")
+	xq := doc.Find("input#xq_m").AttrOr("value", "")
+	if xn != "" && xq != "" {
+		// 直接拼接：如 2025 + 1 = 20251
+		semesterCode := xn + xq
+		semesterText := fmt.Sprintf("%s-%d学年第%d学期", xn, mustInt(xn)+1, mustInt(xq)+1)
+		result.WriteString(fmt.Sprintf("<!-- SEMESTER: %s -->\n", semesterText))
+		result.WriteString(fmt.Sprintf("<!-- SEMESTER_CODE: %s -->\n", semesterCode))
+	}
+
 	// 提取课表主体
 	result.WriteString("<!-- TYPE: 2D_TABLE -->\n")
 	result.WriteString("<table class=\"schedule\">\n")
@@ -294,6 +305,17 @@ func cleanWhitespace(str string) string {
 	// 合并多个空格
 	fields := strings.Fields(str)
 	return strings.Join(fields, " ")
+}
+
+// mustInt 将字符串转换为整数，失败返回 0
+func mustInt(s string) int {
+	n := 0
+	for _, ch := range s {
+		if ch >= '0' && ch <= '9' {
+			n = n*10 + int(ch-'0')
+		}
+	}
+	return n
 }
 
 // decodeGBK 将 GBK 编码的字节转换为 UTF-8 字符串
