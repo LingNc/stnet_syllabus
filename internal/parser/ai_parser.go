@@ -199,7 +199,7 @@ func simplify2DForAI(htmlContent string) string {
 	})
 
 	// 提取课表主体
-	doc.Find("table#mytable, table[name='mytable']").Find("tr").Each(func(i int, row *goquery.Selection) {
+	doc.Find("table#mytable, table[name='mytable'], table.schedule").Find("tr").Each(func(i int, row *goquery.Selection) {
 		result.WriteString("<tr>")
 		row.Find("td").Each(func(j int, cell *goquery.Selection) {
 			courseNode := cell.Find("div.div1")
