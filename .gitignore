@@ -1,6 +1,6 @@
 # 白名单
 /*
-*/
+/*/
 # !*/
 
 # 密钥文件
@@ -9,10 +9,14 @@ api.key
 # 核心文件夹
 !config
 !example
+!internal
+!pkg
+!cmd
 
 # 基本文件夹
 !*code-workspace
 !.gitignore
+!README.md
 !AGENTS.md
 !PLAN.md
 !RULE.md

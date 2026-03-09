@@ -1,0 +1,68 @@
+# 学生网管课程表解析系统 - 全局配置
+
+# 学期配置
+semester:
+  # 学期代码，如 20251 表示 2025-2026 学年第二学期
+  code: "20251"
+  # 学期开始日期（第一周周一）
+  start_date: "2026-03-02"
+  # 学期总周数
+  total_weeks: 20
+  # 复习周（不排班）
+  exam_review_weeks: [20]
+
+# 课程时间映射表（为后续 iCal 功能铺垫）
+time_slots:
+  - period: "1-2"
+    start: "08:00"
+    end: "09:40"
+  - period: "3-4"
+    start: "10:00"
+    end: "11:40"
+  - period: "5-6"
+    start: "14:30"
+    end: "16:10"
+  - period: "7-8"
+    start: "16:30"
+    end: "18:10"
+  - period: "9-10"
+    start: "1930"
+    end: "21:30"
+
+# AI 接口配置
+ai:
+  # DeepSeek API 地址
+  base_url: "https://api.deepseek.com/chat/completions"
+  # 模型名称
+  model: "deepseek-chat"
+  # 并发数限制
+  concurrency: 5
+  # 重试次数
+  max_retries: 3
+  # 请求间隔（毫秒）
+  request_interval: 500
+
+# 路径配置
+paths:
+  # 输入目录
+  input: "./input"
+  # 输出根目录
+  output: "./output"
+  # 临时目录
+  temp_raw: "./output/temp/raw_xls"
+  temp_simplified: "./output/temp/simplified_xls"
+  temp_split_2d: "./output/temp/split/2d_table"
+  temp_split_list: "./output/temp/split/list"
+  # CSV 标准化输出
+  csv_normalized: "./output/csv_normalized"
+  # 最终 Excel 输出
+  final: "./output/final"
+  # 错误日志
+  error_log: "./output/error.log"
+
+# 解析配置
+parser:
+  # 列表格式全占用策略（环节是否占用全部工作日）
+  type1_full_occupy: true
+  # CSV 编码
+  csv_encoding: "utf-8-sig"
