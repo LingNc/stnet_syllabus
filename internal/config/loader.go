@@ -99,7 +99,20 @@ func GetAPIKey(configDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("读取 API 密钥失败: %w", err)
 	}
-	return strings.TrimSpace(string(data)), nil
+
+	// 逐行读取，找到非注释的非空行
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// 跳过空行和注释行
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// 返回第一个非注释行
+		return line, nil
+	}
+
+	return "", fmt.Errorf("未在 %s 中找到有效的 API 密钥", keyPath)
 }
 
 // EnsureDirs 确保所有必要的目录存在
