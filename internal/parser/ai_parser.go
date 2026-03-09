@@ -230,13 +230,100 @@ func ParseCSVFromResponse(response string) (courseCSV, activityCSV string) {
 	matches := courseRe.FindAllStringSubmatch(response, -1)
 
 	if len(matches) >= 1 {
-		courseCSV = matches[0][1]
+		courseCSV = fixCSVQuotes(matches[0][1])
 	}
 	if len(matches) >= 2 {
-		activityCSV = matches[1][1]
+		activityCSV = fixCSVQuotes(matches[1][1])
 	}
 
 	return courseCSV, activityCSV
+}
+
+// fixCSVQuotes 修复 CSV 中的引号问题
+// 如果某行列数超过预期，尝试将多余的部分合并到周次字段并添加引号
+func fixCSVQuotes(csvContent string) string {
+	lines := strings.Split(csvContent, "\n")
+	if len(lines) == 0 {
+		return csvContent
+	}
+
+	var result strings.Builder
+	// 写入表头
+	result.WriteString(lines[0] + "\n")
+
+	// 检测表头的列数
+	headerCols := strings.Split(lines[0], ",")
+	expectedCols := len(headerCols)
+
+	// 处理数据行
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		// 简单解析：按逗号分割，但考虑引号
+		cols := parseCSVLine(line)
+
+		if len(cols) > expectedCols && expectedCols >= 3 {
+			// 列数过多，需要合并到周次字段（第3列，索引2）
+			// 合并从索引2开始到倒数第2列的所有内容（假设最后两列是节次和地点）
+			extraCols := len(cols) - expectedCols
+			weekField := cols[2]
+			for j := 0; j < extraCols; j++ {
+				weekField += "," + cols[3+j]
+			}
+			// 重新构建行
+			newCols := make([]string, expectedCols)
+			newCols[0] = cols[0] // 课程
+			newCols[1] = cols[1] // 教师
+			newCols[2] = weekField
+			// 复制剩余列
+			for j := 3; j < expectedCols; j++ {
+				idx := len(cols) - expectedCols + j
+				if idx < len(cols) {
+					newCols[j] = cols[idx]
+				}
+			}
+			cols = newCols
+		}
+
+		// 确保包含逗号的字段有引号
+		for j := range cols {
+			if strings.Contains(cols[j], ",") && !strings.HasPrefix(cols[j], "\"") {
+				cols[j] = fmt.Sprintf("\"%s\"", cols[j])
+			}
+		}
+
+		result.WriteString(strings.Join(cols, ",") + "\n")
+	}
+
+	return result.String()
+}
+
+// parseCSVLine 简单解析 CSV 行，处理引号
+func parseCSVLine(line string) []string {
+	var cols []string
+	var current strings.Builder
+	inQuotes := false
+
+	for _, ch := range line {
+		if ch == '"' {
+			inQuotes = !inQuotes
+			current.WriteRune(ch)
+		} else if ch == ',' && !inQuotes {
+			cols = append(cols, current.String())
+			current.Reset()
+		} else {
+			current.WriteRune(ch)
+		}
+	}
+	// 添加最后一列
+	if current.Len() > 0 || len(line) == 0 || line[len(line)-1] == ',' {
+		cols = append(cols, current.String())
+	}
+
+	return cols
 }
 
 // MergeCSVs 合并所有 CSV 到一个目录

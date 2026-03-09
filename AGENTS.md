@@ -211,6 +211,12 @@ stnet_syllabus/
 - **修复 API 密钥读取问题**: 修改配置读取逻辑，跳过 `api.key` 中的注释行（以 `#` 开头）
 - **修复学期代码提取**: 在 simplify 步骤添加 SEMESTER 注释，split 步骤从 HTML 中提取学期代码
 
+### 2026-03-09 (修复2)
+- **修复 2D 表学期代码为 unknown**: `simplify2DHTML` 未从隐藏字段提取学期，已添加 `xn` 和 `xq_m` 字段提取
+- **修复 2D 表 AI 解析课程为空**: `simplify2DForAI` 未匹配 `table.schedule` 类表格，已添加选择器
+- **修复 AI 返回 CSV 格式问题**: 周次包含逗号时未用引号包围，已添加 `fixCSVQuotes` 后处理函数自动修复
+- **更新 AI 提示词**: 明确指示 AI 周次包含逗号时必须用双引号包围
+
 ---
 
 ## 待解决问题
