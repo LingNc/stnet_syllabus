@@ -66,3 +66,41 @@ parser:
   type1_full_occupy: true
   # CSV 编码
   csv_encoding: "utf-8-sig"
+
+# Excel 样式配置
+excel:
+  # 表头样式
+  header:
+    # 字体大小
+    font_size: 12
+    # 是否加粗
+    bold: true
+    # 背景颜色 (空或"none"表示无背景)
+    bg_color: "none"
+    # 文字颜色
+    font_color: "#000000"
+    # 底部边框
+    border_bottom: true
+    # 行高
+    row_height: 25
+
+  # 数据行样式
+  data:
+    # 行高
+    row_height: 40
+    # 自动换行
+    wrap_text: true
+
+  # 列宽设置
+  column:
+    # 最小列宽
+    min_width: 8
+    # 最大列宽
+    max_width: 40
+    # 字符宽度系数
+    char_width_factor: 1.2
+
+  # 表格内容设置
+  table:
+    # 节次范围 (1-4表示1-2,3-4,5-6,7-8节)
+    max_periods: 4

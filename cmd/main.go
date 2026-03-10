@@ -319,6 +319,7 @@ func runAggregate(cfg *config.Config) {
 		cfg.Paths.Output,
 		cfg.Semester.TotalWeeks,
 		cfg.Semester.ExamReviewWeeks,
+		cfg.Excel,
 	)
 
 	if err := aggregator.Process(); err != nil {
@@ -363,6 +364,7 @@ func runExcel(cfg *config.Config) {
 		cfg.Paths.Output,
 		cfg.Paths.Final,
 		cfg.Semester.TotalWeeks,
+		cfg.Excel,
 	)
 
 	// 生成主报表（包含汇总和每周）

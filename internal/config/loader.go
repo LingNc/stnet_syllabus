@@ -17,6 +17,7 @@ type Config struct {
 	AI         AIConfig         `yaml:"ai"`
 	Paths      PathsConfig      `yaml:"paths"`
 	Parser     ParserConfig     `yaml:"parser"`
+	Excel      ExcelConfig      `yaml:"excel"`
 }
 
 // SemesterConfig 学期配置
@@ -60,6 +61,42 @@ type PathsConfig struct {
 type ParserConfig struct {
 	Type1FullOccupy bool   `yaml:"type1_full_occupy"`
 	CSVEncoding     string `yaml:"csv_encoding"`
+}
+
+// ExcelConfig Excel样式配置
+type ExcelConfig struct {
+	Header ExcelHeaderConfig `yaml:"header"`
+	Data   ExcelDataConfig   `yaml:"data"`
+	Column ExcelColumnConfig `yaml:"column"`
+	Table  ExcelTableConfig  `yaml:"table"`
+}
+
+// ExcelHeaderConfig 表头样式配置
+type ExcelHeaderConfig struct {
+	FontSize     int    `yaml:"font_size"`
+	Bold         bool   `yaml:"bold"`
+	BgColor      string `yaml:"bg_color"`
+	FontColor    string `yaml:"font_color"`
+	BorderBottom bool   `yaml:"border_bottom"`
+	RowHeight    float64 `yaml:"row_height"`
+}
+
+// ExcelDataConfig 数据行样式配置
+type ExcelDataConfig struct {
+	RowHeight float64 `yaml:"row_height"`
+	WrapText  bool    `yaml:"wrap_text"`
+}
+
+// ExcelColumnConfig 列宽配置
+type ExcelColumnConfig struct {
+	MinWidth          float64 `yaml:"min_width"`
+	MaxWidth          float64 `yaml:"max_width"`
+	CharWidthFactor   float64 `yaml:"char_width_factor"`
+}
+
+// ExcelTableConfig 表格内容配置
+type ExcelTableConfig struct {
+	MaxPeriods int `yaml:"max_periods"`
 }
 
 // GlobalConfig 全局配置实例

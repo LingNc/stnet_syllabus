@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"stnet_syllabus/internal/config"
 )
 
 // Aggregator 聚合器
@@ -18,6 +20,7 @@ type Aggregator struct {
 	OutputDir     string
 	TotalWeeks    int
 	ReviewWeeks   []int
+	MaxPeriods    int
 }
 
 // StudentSchedule 学生课表
@@ -34,12 +37,20 @@ type SlotKey struct {
 }
 
 // NewAggregator 创建聚合器
-func NewAggregator(inputDir, outputDir string, totalWeeks int, reviewWeeks []int) *Aggregator {
+func NewAggregator(inputDir, outputDir string, totalWeeks int, reviewWeeks []int, excelConfig ...config.ExcelConfig) *Aggregator {
+	maxPeriods := 4
+	if len(excelConfig) > 0 {
+		maxPeriods = excelConfig[0].Table.MaxPeriods
+	}
+	if maxPeriods == 0 {
+		maxPeriods = 4
+	}
 	return &Aggregator{
 		InputDir:    inputDir,
 		OutputDir:   outputDir,
 		TotalWeeks:  totalWeeks,
 		ReviewWeeks: reviewWeeks,
+		MaxPeriods:  maxPeriods,
 	}
 }
 
@@ -227,7 +238,7 @@ func (a *Aggregator) parseActivityRow(record []string, colMap map[string]int, sc
 
 	// 环节占用所有时间段
 	for day := 0; day < 5; day++ {
-		for slot := 0; slot < 4; slot++ {
+		for slot := 0; slot < a.MaxPeriods; slot++ {
 			key := SlotKey{Day: day, Slot: slot}
 			if _, exists := schedule.BusySlots[key]; !exists {
 				schedule.BusySlots[key] = make(map[int]bool)
@@ -252,7 +263,7 @@ func (a *Aggregator) calculateFreeTime(schedules map[string]*StudentSchedule) ma
 	}
 
 	for day := 0; day < 5; day++ {
-		for slot := 0; slot < 4; slot++ {
+		for slot := 0; slot < a.MaxPeriods; slot++ {
 			key := SlotKey{Day: day, Slot: slot}
 			var entries []FreeEntry
 
@@ -306,7 +317,7 @@ func (a *Aggregator) generateSummary(freeTimes map[SlotKey][]FreeEntry) error {
 
 	// 表头
 	days := []string{"周一", "周二", "周三", "周四", "周五"}
-	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节"}
+	slots := a.getSlotNames()
 
 	writer.Write(append([]string{"节次"}, days...))
 
@@ -363,7 +374,7 @@ func (a *Aggregator) generateMachineReadable(freeTimes map[SlotKey][]FreeEntry) 
 
 	// 表头
 	days := []string{"周一", "周二", "周三", "周四", "周五"}
-	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节"}
+	slots := a.getSlotNames()
 
 	writer.Write(append([]string{"节次"}, days...))
 
@@ -571,4 +582,13 @@ func joinInts(ints []int, sep string) string {
 		parts = append(parts, strconv.Itoa(i))
 	}
 	return strings.Join(parts, sep)
+}
+
+// getSlotNames 根据MaxPeriods获取节次名称列表
+func (a *Aggregator) getSlotNames() []string {
+	allSlots := []string{"1-2节", "3-4节", "5-6节", "7-8节", "9-10节"}
+	if a.MaxPeriods > len(allSlots) {
+		return allSlots
+	}
+	return allSlots[:a.MaxPeriods]
 }

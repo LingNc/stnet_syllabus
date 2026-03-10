@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xuri/excelize/v2"
+	"stnet_syllabus/internal/config"
 )
 
 // Generator Excel 生成器
@@ -16,15 +17,44 @@ type Generator struct {
 	CSVDir      string
 	OutputDir   string
 	TotalWeeks  int
+	ExcelConfig config.ExcelConfig
 }
 
 // NewGenerator 创建 Excel 生成器
-func NewGenerator(csvDir, outputDir string, totalWeeks int) *Generator {
-	return &Generator{
+func NewGenerator(csvDir, outputDir string, totalWeeks int, excelConfig ...config.ExcelConfig) *Generator {
+	g := &Generator{
 		CSVDir:     csvDir,
 		OutputDir:  outputDir,
 		TotalWeeks: totalWeeks,
 	}
+	if len(excelConfig) > 0 {
+		g.ExcelConfig = excelConfig[0]
+	} else {
+		// 默认配置
+		g.ExcelConfig = config.ExcelConfig{
+			Header: config.ExcelHeaderConfig{
+				FontSize:     12,
+				Bold:         true,
+				BgColor:      "none",
+				FontColor:    "#000000",
+				BorderBottom: true,
+				RowHeight:    25,
+			},
+			Data: config.ExcelDataConfig{
+				RowHeight: 40,
+				WrapText:  true,
+			},
+			Column: config.ExcelColumnConfig{
+				MinWidth:        8,
+				MaxWidth:        40,
+				CharWidthFactor: 1.2,
+			},
+			Table: config.ExcelTableConfig{
+				MaxPeriods: 4,
+			},
+		}
+	}
+	return g
 }
 
 // Generate 生成 Excel 报表
@@ -148,40 +178,53 @@ func (g *Generator) readCSV(filePath string) ([][]string, error) {
 
 // setSheetStyle 设置工作表样式
 func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, maxRow int) {
-	// 设置表头样式（黑白，加粗）
-	headerStyle, _ := f.NewStyle(&excelize.Style{
+	cfg := g.ExcelConfig
+
+	// 构建表头样式
+	headerStyle := &excelize.Style{
 		Font: &excelize.Font{
-			Bold:   true,
-			Size:   12,
+			Bold:   cfg.Header.Bold,
+			Size:   float64(cfg.Header.FontSize),
+			Color:  cfg.Header.FontColor,
 			Family: "Arial",
-		},
-		Fill: excelize.Fill{
-			Type:    "pattern",
-			Color:   []string{"#FFFFFF"},
-			Pattern: 1,
 		},
 		Alignment: &excelize.Alignment{
 			Horizontal: "center",
 			Vertical:   "center",
 		},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#000000", Style: 2},
-		},
-	})
+	}
 
-	// 设置数据样式（无颜色，自动换行）
+	// 背景色
+	if cfg.Header.BgColor != "" && cfg.Header.BgColor != "none" {
+		headerStyle.Fill = excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{cfg.Header.BgColor},
+			Pattern: 1,
+		}
+	}
+
+	// 底部边框
+	if cfg.Header.BorderBottom {
+		headerStyle.Border = []excelize.Border{
+			{Type: "bottom", Color: "#000000", Style: 2},
+		}
+	}
+
+	headerStyleID, _ := f.NewStyle(headerStyle)
+
+	// 设置数据样式
 	dataStyle, _ := f.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{
 			Horizontal: "left",
 			Vertical:   "top",
-			WrapText:   true,
+			WrapText:   cfg.Data.WrapText,
 		},
 	})
 
 	// 应用表头样式
 	for col := 1; col <= maxCol; col++ {
 		cellRef, _ := excelize.CoordinatesToCellName(col, 1)
-		f.SetCellStyle(sheetName, cellRef, cellRef, headerStyle)
+		f.SetCellStyle(sheetName, cellRef, cellRef, headerStyleID)
 	}
 
 	// 应用数据样式
@@ -191,39 +234,49 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 		f.SetCellStyle(sheetName, startCell, endCell, dataStyle)
 	}
 
-	// 设置列宽（更紧凑）
+	// 设置列宽（使用配置）
+	minWidth := cfg.Column.MinWidth
+	if minWidth == 0 {
+		minWidth = 8
+	}
+	maxWidth := cfg.Column.MaxWidth
+	if maxWidth == 0 {
+		maxWidth = 40
+	}
+	charFactor := cfg.Column.CharWidthFactor
+	if charFactor == 0 {
+		charFactor = 1.2
+	}
+
 	for col := 1; col <= maxCol; col++ {
 		colLetter, _ := excelize.ColumnNumberToName(col)
 
 		// 计算最大宽度
-		maxWidth := 8.0
+		colMaxWidth := minWidth
 		for row := 1; row <= maxRow; row++ {
 			cellRef, _ := excelize.CoordinatesToCellName(col, row)
 			val, _ := f.GetCellValue(sheetName, cellRef)
-			width := float64(len(val)) * 1.2
-			if width > maxWidth {
-				maxWidth = width
+			width := float64(len(val)) * charFactor
+			if width > colMaxWidth {
+				colMaxWidth = width
 			}
 		}
 
 		// 限制最大宽度
-		if maxWidth > 40 {
-			maxWidth = 40
+		if colMaxWidth > maxWidth {
+			colMaxWidth = maxWidth
 		}
-		if maxWidth < 8 {
-			maxWidth = 8
+		if colMaxWidth < minWidth {
+			colMaxWidth = minWidth
 		}
 
-		f.SetColWidth(sheetName, colLetter, colLetter, maxWidth)
+		f.SetColWidth(sheetName, colLetter, colLetter, colMaxWidth)
 	}
 
-	// 设置行高（更高一些）
-	for row := 1; row <= maxRow; row++ {
-		if row == 1 {
-			f.SetRowHeight(sheetName, row, 25) // 表头行高
-		} else {
-			f.SetRowHeight(sheetName, row, 40) // 数据行高
-		}
+	// 设置行高（使用配置）
+	f.SetRowHeight(sheetName, 1, cfg.Header.RowHeight)
+	for row := 2; row <= maxRow; row++ {
+		f.SetRowHeight(sheetName, row, cfg.Data.RowHeight)
 	}
 
 	// 冻结首行
