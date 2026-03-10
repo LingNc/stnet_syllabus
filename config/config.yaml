@@ -7,9 +7,9 @@ semester:
   # 学期开始日期（第一周周一）
   start_date: "2026-03-02"
   # 学期总周数
-  total_weeks: 20
+  total_weeks: 21
   # 复习周（不排班）
-  exam_review_weeks: [20]
+  exam_review_weeks: [20,21]
 
 # 课程时间映射表（为后续 iCal 功能铺垫）
 time_slots:
@@ -80,7 +80,7 @@ excel:
     # 文字颜色
     font_color: "#000000"
     # 底部边框
-    border_bottom: true
+    border_bottom: false
     # 行高
     row_height: 20
 

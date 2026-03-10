@@ -21,13 +21,15 @@ type Aggregator struct {
 	TotalWeeks    int
 	ReviewWeeks   []int
 	MaxPeriods    int
+	LogFunc       func(string, ...interface{}) // 日志函数
 }
 
 // StudentSchedule 学生课表
 type StudentSchedule struct {
-	Name      string
-	StudentID string
-	BusySlots map[SlotKey]map[int]bool // 忙碌时间段 -> 周次集合
+	Name          string
+	StudentID     string
+	BusySlots     map[SlotKey]map[int]bool // 忙碌时间段 -> 周次集合
+	HasActivity   bool                     // 是否有环节数据
 }
 
 // SlotKey 时间段键
@@ -52,6 +54,11 @@ func NewAggregator(inputDir, outputDir string, totalWeeks int, reviewWeeks []int
 		ReviewWeeks: reviewWeeks,
 		MaxPeriods:  maxPeriods,
 	}
+}
+
+// SetLogFunc 设置日志函数
+func (a *Aggregator) SetLogFunc(logFunc func(string, ...interface{})) {
+	a.LogFunc = logFunc
 }
 
 // Process 处理所有 CSV 文件
@@ -89,6 +96,9 @@ func (a *Aggregator) Process() error {
 		return fmt.Errorf("生成机器可读表失败: %w", err)
 	}
 
+	// 检查哪些学生没有环节数据
+	a.checkMissingActivities(schedules)
+
 	return nil
 }
 
@@ -123,9 +133,10 @@ func (a *Aggregator) parseCSV(filePath string, schedules map[string]*StudentSche
 	schedule, exists := schedules[key]
 	if !exists {
 		schedule = &StudentSchedule{
-			Name:      name,
-			StudentID: studentID,
-			BusySlots: make(map[SlotKey]map[int]bool),
+			Name:        name,
+			StudentID:   studentID,
+			BusySlots:   make(map[SlotKey]map[int]bool),
+			HasActivity: false,
 		}
 		schedules[key] = schedule
 	}
@@ -156,6 +167,11 @@ func (a *Aggregator) parseCSV(filePath string, schedules map[string]*StudentSche
 
 	// 判断是课程还是环节
 	isActivity := fileType == "activity" || strings.Contains(fileName, "activity")
+
+	// 如果是环节文件且有数据行，标记为有环节
+	if isActivity && len(records) >= 2 {
+		schedule.HasActivity = true
+	}
 
 	// 解析每一行
 	for _, record := range records[1:] {
@@ -591,4 +607,25 @@ func (a *Aggregator) getSlotNames() []string {
 		return allSlots
 	}
 	return allSlots[:a.MaxPeriods]
+}
+
+// checkMissingActivities 检查哪些学生没有环节数据
+func (a *Aggregator) checkMissingActivities(schedules map[string]*StudentSchedule) {
+	var missing []string
+	for _, schedule := range schedules {
+		if !schedule.HasActivity {
+			missing = append(missing, fmt.Sprintf("%s(%s)", schedule.Name, schedule.StudentID))
+		}
+	}
+
+	if len(missing) > 0 {
+		warning := fmt.Sprintf("警告: 以下 %d 位学生没有环节数据: %s",
+			len(missing), strings.Join(missing, ", "))
+		fmt.Printf("  ⚠ %s\n", warning)
+
+		// 记录到日志
+		if a.LogFunc != nil {
+			a.LogFunc("%s", warning)
+		}
+	}
 }

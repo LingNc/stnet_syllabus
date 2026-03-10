@@ -321,6 +321,7 @@ func runAggregate(cfg *config.Config) {
 		cfg.Semester.ExamReviewWeeks,
 		cfg.Excel,
 	)
+	aggregator.SetLogFunc(logError)
 
 	if err := aggregator.Process(); err != nil {
 		fmt.Fprintf(os.Stderr, "空闲时间聚合失败: %v\n", err)
