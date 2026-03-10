@@ -35,7 +35,7 @@ func initErrorLog(cfg *config.Config) error {
 	}
 	errorLog = f
 	logError("=== 错误日志开始 ===")
-	logError("时间: %s", time.Now().Format("2026-03-09 15:04:05"))
+	logError("时间: %s", time.Now().Format("2006-01-02 15:04:05"))
 	return nil
 }
 
