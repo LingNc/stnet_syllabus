@@ -237,19 +237,23 @@ stnet_syllabus/
 4. 需要优化 Excel 输出格式的美观性
 5. 考虑添加进度显示功能
 
-### 2026-03-10 (修复 - 数据校验流程)
-- **修复验证失败文件仍进入后续步骤的问题**:
-  - 修改 `cmd/main.go` 的 `runValidate` 函数，在验证完成后自动删除所有 `Valid=false` 的文件
-  - 确保 xlsx 二进制文件、格式错误文件不会进入 split 和 parse 步骤
-  - 控制台输出显示已删除的无效文件列表
+### 2026-03-10 (修复 - 数据校验流程控制)
+- **修复二进制 xlsx 文件进入后续步骤的问题**:
+  - 在 `simplify` 步骤添加 `isBinaryContent()` 检测二进制文件（xlsx格式以PK开头或含大量null字节）
+  - 在 `simplify` 步骤添加 `isValidHTML()` 检测是否包含基本HTML标签和表格
+  - 二进制文件在 simplify 阶段被拦截，不会进入 simplified_xls 目录
+  - 错误信息通过日志函数记录到 error.log
 
-- **修复警告未记录到 error.log 的问题**:
-  - 验证器中已使用 `v.logError()` 记录所有警告（姓名不匹配、学号不匹配、学期代码不一致）
-  - 这些警告会输出到 `output/error.log` 供后续查看
+- **统一日志系统**:
+  - `simplify` 和 `validate` 模块添加 `LogFunc` 回调函数参数
+  - 所有错误和警告统一使用 `main.go` 的全局 `logError()` 记录
+  - 确保时间戳格式一致，避免日志混乱
 
-- **修复 xlsx 二进制文件检测**:
-  - `validate.go` 已添加 `isHTMLContent()` 函数检测 HTML 标签
-  - 非 HTML 文件（如 xlsx 二进制）会被标记为验证失败并删除
+- **验证失败文件阻止进入后续步骤**:
+  - 二进制文件在 simplify 阶段被拦截，不会生成到 simplified_xls
+  - 验证失败的文件在 validate 阶段被删除
+  - 后续步骤只处理有效文件
+
 - **修复预处理文件名匹配问题**:
   - 支持 .xlsx 扩展名文件（李紫颖的"早睡.xlsx"）
   - 修复全角空格文件名匹配（白昊杰的文件名是多个全角空格）

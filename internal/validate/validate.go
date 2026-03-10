@@ -17,6 +17,7 @@ type Validator struct {
 	ErrorLog     string
 	errors       []string
 	SemesterCode string // 期望的学期代码
+	LogFunc      func(string, ...interface{}) // 外部日志函数
 }
 
 // ValidationResult 验证结果
@@ -31,12 +32,13 @@ type ValidationResult struct {
 }
 
 // NewValidator 创建验证器
-func NewValidator(inputDir, errorLog, semesterCode string) *Validator {
+func NewValidator(inputDir, errorLog, semesterCode string, logFunc func(string, ...interface{})) *Validator {
 	return &Validator{
 		InputDir:     inputDir,
 		ErrorLog:     errorLog,
 		errors:       []string{},
 		SemesterCode: semesterCode,
+		LogFunc:      logFunc,
 	}
 }
 
@@ -130,14 +132,6 @@ func (v *Validator) Process() ([]ValidationResult, error) {
 			fmt.Printf("✗ 验证失败: %s - %s\n", entry.Name(), result.Error)
 		}
 	}
-
-	// 写入错误日志
-	if len(v.errors) > 0 {
-		if err := v.writeErrorLog(); err != nil {
-			fmt.Printf("警告: 写入错误日志失败: %v\n", err)
-		}
-	}
-
 	fmt.Printf("\n验证完成: 通过 %d, 失败 %d\n", validCount, errorCount)
 	return results, nil
 }
@@ -232,8 +226,12 @@ func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID st
 
 // logError 记录错误
 func (v *Validator) logError(fileName, errorMsg string) {
-	timestamp := "" // 可以添加时间戳
-	v.errors = append(v.errors, fmt.Sprintf("[%s] %s: %s", timestamp, fileName, errorMsg))
+	msg := fmt.Sprintf("%s: %s", fileName, errorMsg)
+	v.errors = append(v.errors, msg)
+	// 如果有外部日志函数，也使用它
+	if v.LogFunc != nil {
+		v.LogFunc("%s", msg)
+	}
 }
 
 // writeErrorLog 写入错误日志

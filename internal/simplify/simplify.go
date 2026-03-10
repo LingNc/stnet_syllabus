@@ -16,14 +16,19 @@ import (
 type Simplifier struct {
 	InputDir  string
 	OutputDir string
+	LogFunc   func(string, ...interface{}) // 外部日志函数
 }
 
 // NewSimplifier 创建精简器
-func NewSimplifier(inputDir, outputDir string) *Simplifier {
-	return &Simplifier{
+func NewSimplifier(inputDir, outputDir string, logFunc ...func(string, ...interface{})) *Simplifier {
+	s := &Simplifier{
 		InputDir:  inputDir,
 		OutputDir: outputDir,
 	}
+	if len(logFunc) > 0 {
+		s.LogFunc = logFunc[0]
+	}
+	return s
 }
 
 // SimplifyFile 精简单个 HTML 文件
@@ -34,11 +39,21 @@ func (s *Simplifier) SimplifyFile(inputPath, outputPath string) error {
 		return fmt.Errorf("读取文件失败: %w", err)
 	}
 
+	// 检测是否是二进制格式（xlsx等）
+	if isBinaryContent(content) {
+		return fmt.Errorf("文件是二进制格式（可能是xlsx），不是HTML格式，请转换为HTML后再处理")
+	}
+
 	// 尝试将 GBK 转换为 UTF-8
 	htmlContent, err := decodeGBK(content)
 	if err != nil {
 		// 如果转换失败，尝试直接使用原内容
 		htmlContent = string(content)
+	}
+
+	// 检查是否是有效的HTML格式
+	if !isValidHTML(htmlContent) {
+		return fmt.Errorf("文件不是有效的HTML格式（缺少必要的HTML标签）")
 	}
 
 	// 判断文件格式
@@ -98,7 +113,11 @@ func (s *Simplifier) Process() error {
 		outputPath := filepath.Join(s.OutputDir, entry.Name())
 
 		if err := s.SimplifyFile(inputPath, outputPath); err != nil {
-			fmt.Printf("错误: 精简文件 %s 失败: %v\n", entry.Name(), err)
+			errMsg := fmt.Sprintf("精简文件 %s 失败: %v", entry.Name(), err)
+			fmt.Printf("错误: %s\n", errMsg)
+			if s.LogFunc != nil {
+				s.LogFunc("%s", errMsg)
+			}
 			errors++
 			continue
 		}
@@ -326,4 +345,39 @@ func decodeGBK(data []byte) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+// isBinaryContent 检测内容是否是二进制格式（如xlsx）
+func isBinaryContent(data []byte) bool {
+	// 检查常见的二进制文件魔数
+	// xlsx 文件实际上是 ZIP 格式，以 PK 开头
+	if len(data) >= 2 && data[0] == 'P' && data[1] == 'K' {
+		return true
+	}
+	// 检查是否包含大量 null 字节（二进制文件特征）
+	nullCount := 0
+	checkLen := len(data)
+	if checkLen > 1024 {
+		checkLen = 1024
+	}
+	for i := 0; i < checkLen; i++ {
+		if data[i] == 0 {
+			nullCount++
+		}
+	}
+	// 如果前1KB中有超过10个null字节，认为是二进制
+	return nullCount > 10
+}
+
+// isValidHTML 检查内容是否是有效的HTML格式
+func isValidHTML(content string) bool {
+	contentLower := strings.ToLower(content)
+	// 必须包含基本的HTML标签
+	hasHTML := strings.Contains(contentLower, "<html") ||
+		strings.Contains(contentLower, "<!doctype html")
+	hasBody := strings.Contains(contentLower, "<body")
+	// 必须包含表格（课表应该有表格）
+	hasTable := strings.Contains(contentLower, "<table")
+
+	return hasHTML && hasBody && hasTable
 }

@@ -178,6 +178,7 @@ func runSimplify(cfg *config.Config) {
 	simplifier := simplify.NewSimplifier(
 		cfg.Paths.TempRaw,
 		cfg.Paths.TempSimplified,
+		logError, // 传递日志函数
 	)
 
 	if err := simplifier.Process(); err != nil {
@@ -192,6 +193,7 @@ func runValidate(cfg *config.Config) {
 		cfg.Paths.TempSimplified,
 		cfg.Paths.ErrorLog,
 		cfg.Semester.Code, // 传入配置的学期代码
+		logError,          // 传递日志函数
 	)
 
 	results, err := validator.Process()
@@ -204,11 +206,11 @@ func runValidate(cfg *config.Config) {
 	// 记录验证错误并删除无效文件
 	invalidCount := 0
 	for _, r := range results {
-		if r.Error != "" {
-			logError("验证失败 [%s]: %s", r.FilePath, r.Error)
-		}
 		// 删除验证失败的文件，防止进入后续步骤
 		if !r.Valid {
+			if r.Error != "" {
+				logError("验证失败 [%s]: %s", r.FilePath, r.Error)
+			}
 			if err := os.Remove(r.FilePath); err != nil {
 				fmt.Fprintf(os.Stderr, "警告: 删除无效文件失败 %s: %v\n", r.FilePath, err)
 				logError("删除无效文件失败 [%s]: %v", r.FilePath, err)
