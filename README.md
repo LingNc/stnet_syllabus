@@ -35,21 +35,24 @@ go mod tidy
 ### 运行
 
 ```bash
+# 编译程序
+go build -o stnet_syllabus ./cmd
+
 # 执行完整流程
-go run cmd/main.go
+./stnet_syllabus
 
 # 执行特定步骤
-go run cmd/main.go -step preprocess    # 数据预处理
-go run cmd/main.go -step simplify      # HTML 精简
-go run cmd/main.go -step validate      # 数据验证
-go run cmd/main.go -step split         # 数据拆分
-go run cmd/main.go -step parse         # 课表解析
-go run cmd/main.go -step aggregate     # 空闲时间聚合
-go run cmd/main.go -step weekly        # 周次切片
-go run cmd/main.go -step excel         # Excel 生成
+./stnet_syllabus -step preprocess    # 数据预处理
+./stnet_syllabus -step simplify      # HTML 精简
+./stnet_syllabus -step validate      # 数据验证
+./stnet_syllabus -step split         # 数据拆分
+./stnet_syllabus -step parse         # 课表解析
+./stnet_syllabus -step aggregate     # 空闲时间聚合
+./stnet_syllabus -step weekly        # 周次切片
+./stnet_syllabus -step excel         # Excel 生成
 
 # 跳过 AI 解析（仅处理列表格式）
-go run cmd/main.go -skip-ai
+./stnet_syllabus -skip-ai
 ```
 
 ## 项目结构
