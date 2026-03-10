@@ -72,7 +72,7 @@ excel:
   # 表头样式
   header:
     # 字体大小
-    font_size: 12
+    font_size: 10
     # 是否加粗
     bold: true
     # 背景颜色 (空或"none"表示无背景)
@@ -82,16 +82,29 @@ excel:
     # 底部边框
     border_bottom: true
     # 行高
-    row_height: 25
+    row_height: 20
 
   # 数据行样式
   data:
     # 行高
-    row_height: 40
+    row_height: 90
     # 自动换行
     wrap_text: true
 
-  # 列宽设置
+  # 第一列（节次列）专用样式
+  first_column:
+    # 字体大小
+    font_size: 10
+    # 是否加粗
+    bold: true
+    # 背景颜色
+    bg_color: "none"
+    # 文字颜色
+    font_color: "#000000"
+    # 水平对齐方式
+    align: "center"
+    # 列宽
+    width: 10
   column:
     # 最小列宽
     min_width: 8

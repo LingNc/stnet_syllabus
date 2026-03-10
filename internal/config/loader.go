@@ -65,10 +65,11 @@ type ParserConfig struct {
 
 // ExcelConfig Excel样式配置
 type ExcelConfig struct {
-	Header ExcelHeaderConfig `yaml:"header"`
-	Data   ExcelDataConfig   `yaml:"data"`
-	Column ExcelColumnConfig `yaml:"column"`
-	Table  ExcelTableConfig  `yaml:"table"`
+	Header       ExcelHeaderConfig       `yaml:"header"`
+	Data         ExcelDataConfig         `yaml:"data"`
+	Column       ExcelColumnConfig       `yaml:"column"`
+	Table        ExcelTableConfig        `yaml:"table"`
+	FirstColumn  ExcelFirstColumnConfig  `yaml:"first_column"`
 }
 
 // ExcelHeaderConfig 表头样式配置
@@ -97,6 +98,16 @@ type ExcelColumnConfig struct {
 // ExcelTableConfig 表格内容配置
 type ExcelTableConfig struct {
 	MaxPeriods int `yaml:"max_periods"`
+}
+
+// ExcelFirstColumnConfig 第一列（节次列）专用配置
+type ExcelFirstColumnConfig struct {
+	FontSize   int     `yaml:"font_size"`
+	Bold       bool    `yaml:"bold"`
+	BgColor    string  `yaml:"bg_color"`
+	FontColor  string  `yaml:"font_color"`
+	Align      string  `yaml:"align"`
+	Width      float64 `yaml:"width"`
 }
 
 // GlobalConfig 全局配置实例

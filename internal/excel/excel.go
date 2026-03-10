@@ -221,17 +221,52 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 		},
 	})
 
-	// 应用表头样式
-	for col := 1; col <= maxCol; col++ {
+	// 构建第一列（节次列）专用样式
+	firstColAlign := cfg.FirstColumn.Align
+	if firstColAlign == "" {
+		firstColAlign = "center"
+	}
+	firstColStyle := &excelize.Style{
+		Font: &excelize.Font{
+			Bold:  cfg.FirstColumn.Bold,
+			Size:  float64(cfg.FirstColumn.FontSize),
+			Color: cfg.FirstColumn.FontColor,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: firstColAlign,
+			Vertical:   "center",
+		},
+	}
+	if cfg.FirstColumn.BgColor != "" && cfg.FirstColumn.BgColor != "none" {
+		firstColStyle.Fill = excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{cfg.FirstColumn.BgColor},
+			Pattern: 1,
+		}
+	}
+	firstColStyleID, _ := f.NewStyle(firstColStyle)
+
+	// 应用表头样式（除第一列外）
+	for col := 2; col <= maxCol; col++ {
 		cellRef, _ := excelize.CoordinatesToCellName(col, 1)
 		f.SetCellStyle(sheetName, cellRef, cellRef, headerStyleID)
 	}
+	// 第一列表头使用专用样式
+	firstHeaderCell, _ := excelize.CoordinatesToCellName(1, 1)
+	f.SetCellStyle(sheetName, firstHeaderCell, firstHeaderCell, firstColStyleID)
 
-	// 应用数据样式
+	// 应用数据样式（除第一列外）
 	if maxRow > 1 {
-		startCell, _ := excelize.CoordinatesToCellName(1, 2)
+		startCell, _ := excelize.CoordinatesToCellName(2, 2)
 		endCell, _ := excelize.CoordinatesToCellName(maxCol, maxRow)
 		f.SetCellStyle(sheetName, startCell, endCell, dataStyle)
+	}
+	// 第一列数据使用专用样式
+	if maxRow > 1 {
+		for row := 2; row <= maxRow; row++ {
+			cellRef, _ := excelize.CoordinatesToCellName(1, row)
+			f.SetCellStyle(sheetName, cellRef, cellRef, firstColStyleID)
+		}
 	}
 
 	// 设置列宽（使用配置）
@@ -248,7 +283,16 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 		charFactor = 1.2
 	}
 
-	for col := 1; col <= maxCol; col++ {
+	// 第一列使用固定宽度
+	firstColWidth := cfg.FirstColumn.Width
+	if firstColWidth == 0 {
+		firstColWidth = 10
+	}
+	firstColLetter, _ := excelize.ColumnNumberToName(1)
+	f.SetColWidth(sheetName, firstColLetter, firstColLetter, firstColWidth)
+
+	// 其他列自动计算宽度
+	for col := 2; col <= maxCol; col++ {
 		colLetter, _ := excelize.ColumnNumberToName(col)
 
 		// 计算最大宽度
