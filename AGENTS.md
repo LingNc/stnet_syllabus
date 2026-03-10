@@ -259,6 +259,42 @@ stnet_syllabus/
   - 修复全角空格文件名匹配（白昊杰的文件名是多个全角空格）
   - 处理结果从 34 个成功恢复到 36 个成功
 
+### 2026-03-10 (修复 - Excel格式和CSV分隔符)
+- **修复Excel总文件生成问题**:
+  - 修复 weekly 文件路径错误，现在正确从 `output/weekly/` 目录读取
+  - 生成的 `free_time_schedule.xlsx` 现在包含汇总表和20个周表
+
+- **修复Excel样式问题**:
+  - 去掉9-10节（只保留1-2节、3-4节、5-6节、7-8节）
+  - 去掉蓝色背景，改为干净的黑白样式
+  - 表头行加粗，添加底部边框
+  - 调整列宽（更紧凑）
+  - 调整行高（表头25，数据40）
+  - 代码位置：`internal/excel/excel.go:setSheetStyle()`
+
+- **修复CSV人名分隔符**:
+  - 人类可读的无课表（free_time_summary.csv）中人名分隔从顿号"、"改为空格" "
+  - 代码位置：`internal/aggregate/aggregate.go:generateSummary()`
+
+## 可用技能
+
+### analysis-report
+**路径**: `.agents/skills/analysis-report/SKILL.md`
+
+**用途**: 根据计划要求分析项目执行成果，检查输出一致性，验证数据完整性，并生成全面的ANALYSIS_REPORT.md。
+
+**适用场景**:
+- 验证项目输出是否符合预期
+- 排查不一致问题
+- 对照需求核实完整性
+- 审核执行结果
+
+**使用方法**:
+1. 确保已运行项目生成输出
+2. 使用 `/analysis-report` 或调用analysis-report技能
+3. 指定要比对的Plan文件（如 `plan/PLAN_0.md`）
+4. 技能会自动检查输出文件、日志，生成分析报告
+
 - 示例代码位于 `example/` 目录
 - Python 原型代码供逻辑参考
 - 目标输出格式参考 `example/` 中的 CSV 文件

@@ -18,6 +18,9 @@ api.key
 !pkg
 !cmd
 
+# 工具
+!.agents
+
 # 基本文件夹
 !*code-workspace
 !.gitignore

@@ -227,7 +227,7 @@ func (a *Aggregator) parseActivityRow(record []string, colMap map[string]int, sc
 
 	// 环节占用所有时间段
 	for day := 0; day < 5; day++ {
-		for slot := 0; slot < 5; slot++ {
+		for slot := 0; slot < 4; slot++ {
 			key := SlotKey{Day: day, Slot: slot}
 			if _, exists := schedule.BusySlots[key]; !exists {
 				schedule.BusySlots[key] = make(map[int]bool)
@@ -252,7 +252,7 @@ func (a *Aggregator) calculateFreeTime(schedules map[string]*StudentSchedule) ma
 	}
 
 	for day := 0; day < 5; day++ {
-		for slot := 0; slot < 5; slot++ {
+		for slot := 0; slot < 4; slot++ {
 			key := SlotKey{Day: day, Slot: slot}
 			var entries []FreeEntry
 
@@ -306,7 +306,7 @@ func (a *Aggregator) generateSummary(freeTimes map[SlotKey][]FreeEntry) error {
 
 	// 表头
 	days := []string{"周一", "周二", "周三", "周四", "周五"}
-	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节", "9-10节"}
+	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节"}
 
 	writer.Write(append([]string{"节次"}, days...))
 
@@ -330,9 +330,9 @@ func (a *Aggregator) generateSummary(freeTimes map[SlotKey][]FreeEntry) error {
 			for weekStr, names := range weeksToNames {
 				sort.Strings(names)
 				if weekStr == "" {
-					parts = append(parts, strings.Join(names, "、"))
+					parts = append(parts, strings.Join(names, " "))
 				} else {
-					parts = append(parts, fmt.Sprintf("%s(%s)", strings.Join(names, "、"), weekStr))
+					parts = append(parts, fmt.Sprintf("%s(%s)", strings.Join(names, " "), weekStr))
 				}
 			}
 
@@ -363,7 +363,7 @@ func (a *Aggregator) generateMachineReadable(freeTimes map[SlotKey][]FreeEntry) 
 
 	// 表头
 	days := []string{"周一", "周二", "周三", "周四", "周五"}
-	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节", "9-10节"}
+	slots := []string{"1-2节", "3-4节", "5-6节", "7-8节"}
 
 	writer.Write(append([]string{"节次"}, days...))
 

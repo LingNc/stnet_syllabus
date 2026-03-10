@@ -42,8 +42,9 @@ func (g *Generator) Generate() error {
 	}
 
 	// 添加每周表
+	weeklyDir := filepath.Join(g.CSVDir, "weekly")
 	for week := 1; week <= g.TotalWeeks; week++ {
-		weekFile := filepath.Join(g.CSVDir, fmt.Sprintf("free_week_%d.csv", week))
+		weekFile := filepath.Join(weeklyDir, fmt.Sprintf("free_week_%d.csv", week))
 		if _, err := os.Stat(weekFile); os.IsNotExist(err) {
 			continue
 		}
@@ -147,25 +148,28 @@ func (g *Generator) readCSV(filePath string) ([][]string, error) {
 
 // setSheetStyle 设置工作表样式
 func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, maxRow int) {
-	// 设置表头样式
+	// 设置表头样式（黑白，加粗）
 	headerStyle, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{
-			Bold:  true,
-			Color: "#FFFFFF",
-			Size:  11,
+			Bold:   true,
+			Size:   12,
+			Family: "Arial",
 		},
 		Fill: excelize.Fill{
 			Type:    "pattern",
-			Color:   []string{"#4472C4"},
+			Color:   []string{"#FFFFFF"},
 			Pattern: 1,
 		},
 		Alignment: &excelize.Alignment{
 			Horizontal: "center",
 			Vertical:   "center",
 		},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: "#000000", Style: 2},
+		},
 	})
 
-	// 设置数据样式
+	// 设置数据样式（无颜色，自动换行）
 	dataStyle, _ := f.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{
 			Horizontal: "left",
@@ -187,35 +191,39 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 		f.SetCellStyle(sheetName, startCell, endCell, dataStyle)
 	}
 
-	// 自动调整列宽
+	// 设置列宽（更紧凑）
 	for col := 1; col <= maxCol; col++ {
 		colLetter, _ := excelize.ColumnNumberToName(col)
 
 		// 计算最大宽度
-		maxWidth := 10.0
+		maxWidth := 8.0
 		for row := 1; row <= maxRow; row++ {
 			cellRef, _ := excelize.CoordinatesToCellName(col, row)
 			val, _ := f.GetCellValue(sheetName, cellRef)
-			width := float64(len(val)) * 1.5
+			width := float64(len(val)) * 1.2
 			if width > maxWidth {
 				maxWidth = width
 			}
 		}
 
 		// 限制最大宽度
-		if maxWidth > 50 {
-			maxWidth = 50
+		if maxWidth > 40 {
+			maxWidth = 40
 		}
-		if maxWidth < 10 {
-			maxWidth = 10
+		if maxWidth < 8 {
+			maxWidth = 8
 		}
 
 		f.SetColWidth(sheetName, colLetter, colLetter, maxWidth)
 	}
 
-	// 设置行高
+	// 设置行高（更高一些）
 	for row := 1; row <= maxRow; row++ {
-		f.SetRowHeight(sheetName, row, 30)
+		if row == 1 {
+			f.SetRowHeight(sheetName, row, 25) // 表头行高
+		} else {
+			f.SetRowHeight(sheetName, row, 40) // 数据行高
+		}
 	}
 
 	// 冻结首行
