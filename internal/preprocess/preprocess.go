@@ -266,20 +266,38 @@ func (p *Processor) ExtractAndRename(zipPath string, mapping []MappingEntry) err
 			continue
 		}
 
-		// 只处理 .xls 文件
-		if !strings.HasSuffix(strings.ToLower(file.Name), ".xls") {
+		// 只处理 .xls 和 .xlsx 文件
+		lowerName := strings.ToLower(file.Name)
+		if !strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
 			continue
 		}
 
 		// 获取原始文件名（不含路径和扩展名）
-		baseName := strings.TrimSuffix(filepath.Base(file.Name), ".xls")
+		baseName := filepath.Base(file.Name)
+		// 去除 .xls 或 .xlsx 扩展名
+		baseName = strings.TrimSuffix(baseName, ".xls")
+		baseName = strings.TrimSuffix(baseName, ".xlsx")
+		baseName = strings.TrimSuffix(baseName, ".XLS")
+		baseName = strings.TrimSuffix(baseName, ".XLSX")
 
-		// 查找映射
+		// 查找映射（支持全角空格文件名匹配）
 		entry, found := fileMap[baseName]
 		if !found {
-			fmt.Printf("警告: 文件 %s 在映射表中未找到，跳过\n", baseName)
-			skipped++
-			continue
+			// 尝试用原始字符串匹配（处理特殊字符）
+			for key, val := range fileMap {
+				if strings.TrimSpace(key) == strings.TrimSpace(baseName) ||
+					strings.Contains(key, baseName) ||
+					strings.Contains(baseName, key) {
+					entry = val
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("警告: 文件 %s (base=%s) 在映射表中未找到，跳过\n", file.Name, baseName)
+				skipped++
+				continue
+			}
 		}
 
 		// 打开 zip 中的文件
