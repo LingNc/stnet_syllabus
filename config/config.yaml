@@ -87,7 +87,7 @@ excel:
   # 数据行样式
   data:
     # 行高
-    row_height: 90
+    row_height: 80
     # 自动换行
     wrap_text: true
 
@@ -104,12 +104,12 @@ excel:
     # 水平对齐方式
     align: "center"
     # 列宽
-    width: 10
+    width: 5
   column:
     # 最小列宽
     min_width: 8
     # 最大列宽
-    max_width: 40
+    max_width: 30
     # 字符宽度系数
     char_width_factor: 1.2
 
