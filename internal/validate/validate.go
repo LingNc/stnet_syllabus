@@ -68,13 +68,20 @@ func (v *Validator) ValidateFile(filePath string) ValidationResult {
 
 	htmlContent := string(content)
 
+	// 检查是否是HTML格式（xlsx是二进制格式，不应该继续处理）
+	if !isHTMLContent(htmlContent) {
+		result.Error = "文件不是HTML格式（可能是xlsx二进制格式）"
+		v.logError(fileName, result.Error)
+		return result
+	}
+
 	// 提取学期信息
 	semester, semesterCode := extractSemester(htmlContent)
 	result.Semester = semester
 	result.SemesterCode = semesterCode
 
 	// 验证姓名学号一致性
-	if err := v.validateConsistency(htmlContent, name, studentID); err != nil {
+	if err := v.validateConsistency(htmlContent, name, studentID, fileName); err != nil {
 		result.Error = fmt.Sprintf("数据一致性验证失败: %v", err)
 		v.logError(fileName, result.Error)
 		return result
@@ -176,8 +183,18 @@ func extractSemester(htmlContent string) (semester, semesterCode string) {
 	return semester, semesterCode
 }
 
+// isHTMLContent 检查内容是否是HTML格式
+func isHTMLContent(content string) bool {
+	// 检查是否包含HTML标签
+	content = strings.ToLower(content)
+	return strings.Contains(content, "<!doctype html") ||
+		strings.Contains(content, "<html") ||
+		strings.Contains(content, "<head") ||
+		strings.Contains(content, "<body")
+}
+
 // validateConsistency 验证文件内容与文件名的一致性
-func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID string) error {
+func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID string, fileName string) error {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		return fmt.Errorf("解析 HTML 失败: %w", err)
@@ -189,7 +206,9 @@ func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID st
 	// 检查姓名
 	if !strings.Contains(pageText, expectedName) {
 		// 有些文件可能使用繁体或不同写法，输出警告但不阻止
-		fmt.Printf("  警告: 文件中可能未包含姓名 '%s'\n", expectedName)
+		warning := fmt.Sprintf("警告: 文件中可能未包含姓名 '%s'", expectedName)
+		fmt.Printf("  %s\n", warning)
+		v.logError(fileName, warning)
 	}
 
 	// 检查学号（尝试多种格式）
@@ -203,7 +222,9 @@ func (v *Validator) validateConsistency(htmlContent, expectedName, expectedID st
 			}
 		}
 		// 仅警告，不阻止处理
-		fmt.Printf("  警告: 文件内容中学号 '%s' 与文件名不一致（可能是Excel精度问题）\n", expectedID)
+		warning := fmt.Sprintf("警告: 文件内容中学号 '%s' 与文件名不一致（可能是Excel精度问题）", expectedID)
+		fmt.Printf("  %s\n", warning)
+		v.logError(fileName, warning)
 	}
 
 	return nil

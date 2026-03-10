@@ -201,11 +201,26 @@ func runValidate(cfg *config.Config) {
 		return
 	}
 
-	// 记录验证错误
+	// 记录验证错误并删除无效文件
+	invalidCount := 0
 	for _, r := range results {
 		if r.Error != "" {
 			logError("验证失败 [%s]: %s", r.FilePath, r.Error)
 		}
+		// 删除验证失败的文件，防止进入后续步骤
+		if !r.Valid {
+			if err := os.Remove(r.FilePath); err != nil {
+				fmt.Fprintf(os.Stderr, "警告: 删除无效文件失败 %s: %v\n", r.FilePath, err)
+				logError("删除无效文件失败 [%s]: %v", r.FilePath, err)
+			} else {
+				fmt.Printf("  已删除无效文件: %s\n", filepath.Base(r.FilePath))
+				invalidCount++
+			}
+		}
+	}
+
+	if invalidCount > 0 {
+		fmt.Printf("\n已清理 %d 个无效文件，这些文件将不会进入后续处理步骤\n", invalidCount)
 	}
 }
 
