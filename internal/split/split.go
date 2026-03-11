@@ -165,8 +165,15 @@ func (s *Splitter) parseFileName(fileName string) (name, studentID, semesterCode
 
 // detectFormat 检测格式
 func detectFormat(htmlContent string) string {
+	// 检查原始标记（未简化的文件）
 	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
 		strings.Contains(htmlContent, "上课班级代码") {
+		return "list"
+	}
+	// 检查简化后的标记
+	if strings.Contains(htmlContent, "<!-- SEMESTER:") ||
+		strings.Contains(htmlContent, "<!-- TYPE: COURSE -->") ||
+		strings.Contains(htmlContent, "<!-- TYPE: ACTIVITY -->") {
 		return "list"
 	}
 	if strings.Contains(htmlContent, `id='mytable'`) ||
