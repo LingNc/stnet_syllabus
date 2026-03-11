@@ -27,6 +27,7 @@ func InitConfig(targetDir string, force bool) error {
 		"config.yaml",
 		"二维表.prompt",
 		"README.md",
+		"api.key",
 	}
 
 	for _, fileName := range files {
