@@ -78,10 +78,8 @@ func main() {
 		semesterStart = flag.String("semester-start", "", "学期开始日期（格式: YYYY-MM-DD，覆盖配置文件）")
 
 		// ICS 导出参数
-		icsFile       = flag.String("ics", "", "导出 ICS 日历文件路径（触发 ICS 导出模式）")
-		icsStudentName = flag.String("ics-name", "", "学生姓名（用于 ICS 文件名，未指定时从输入文件推断）")
-		icsStudentID   = flag.String("ics-id", "", "学生学号（用于 ICS 文件名，未指定时从输入文件推断）")
-		icsSemester    = flag.String("ics-semester", "", "学期代码（用于 ICS 文件名，未指定时从配置推断）")
+		icsInputFile  = flag.String("ics-input", "", "输入的 .xls 课表文件路径（个人模式：直接从xls生成ics）")
+		icsOutputFile = flag.String("ics", "", "导出 ICS 日历文件路径（批量模式：在正常流程中生成所有ics）")
 
 		// 初始化参数
 		initFlag    = flag.Bool("init", false, "初始化配置目录（在当前目录创建 config/ 并释放默认配置）")
@@ -143,9 +141,9 @@ func main() {
 	}
 	defer closeErrorLog()
 
-	// 处理 ICS 导出模式
-	if *icsFile != "" || *step == "ics" {
-		runICSExport(cfg, *icsFile, *icsStudentName, *icsStudentID, *icsSemester)
+	// 处理 ICS 单文件导出模式（直接从 .xls 到 .ics 的个人模式）
+	if *icsInputFile != "" {
+		runICSSingleFile(cfg, *icsInputFile, *icsOutputFile, *configFile, *skipAI)
 		return
 	}
 
@@ -153,6 +151,11 @@ func main() {
 	switch *step {
 	case "all":
 		runAll(cfg, *skipAI)
+		// 如果指定了 -ics 参数，在批量流程后生成 ICS
+		if *icsOutputFile != "" {
+			fmt.Println("\n" + strings.Repeat("=", 40))
+			runICSExport(cfg, *icsOutputFile)
+		}
 	case "preprocess":
 		runPreprocess(cfg)
 	case "simplify":
@@ -171,7 +174,7 @@ func main() {
 		runExcel(cfg)
 	default:
 		fmt.Fprintf(os.Stderr, "未知步骤: %s\n", *step)
-		fmt.Fprintf(os.Stderr, "可用步骤: all, preprocess, simplify, validate, split, parse, aggregate, weekly, excel, ics\n")
+		fmt.Fprintf(os.Stderr, "可用步骤: all, preprocess, simplify, validate, split, parse, aggregate, weekly, excel\n")
 		os.Exit(1)
 	}
 }
@@ -495,23 +498,23 @@ func generateFullScheduleFileName(semesterCode string) string {
 	return fmt.Sprintf("学生网管%d-%d学年%s无课表.xlsx", yearInt, nextYear, semesterName)
 }
 
-// runICSExport 执行 ICS 日历导出
-func runICSExport(cfg *config.Config, icsFilePath, studentName, studentID, semesterCode string) {
-	fmt.Println("=== ICS 日历导出模式 ===\n")
+// runICSExport 批量生成 ICS（从 csv_normalized 目录）
+func runICSExport(cfg *config.Config, icsFilePath string) {
+	fmt.Println("=== ICS 日历批量导出 ===\n")
 
 	// 解析学期开始日期
 	startDate, err := time.Parse("2006-01-02", cfg.Semester.StartDate)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "解析学期开始日期失败: %v\n", err)
 		logError("解析学期开始日期失败: %v", err)
-		os.Exit(1)
+		return
 	}
 
 	// 验证开始日期是周一
 	if startDate.Weekday() != time.Monday {
 		fmt.Fprintf(os.Stderr, "错误: 学期开始日期 %s 不是周一\n", cfg.Semester.StartDate)
 		logError("学期开始日期不是周一: %s", cfg.Semester.StartDate)
-		os.Exit(1)
+		return
 	}
 
 	// 构建时间段映射
@@ -522,56 +525,192 @@ func runICSExport(cfg *config.Config, icsFilePath, studentName, studentID, semes
 	if len(csvFiles) == 0 {
 		fmt.Fprintf(os.Stderr, "错误: 在 %s 中未找到课程 CSV 文件\n", cfg.Paths.CSVNormalized)
 		logError("未找到课程 CSV 文件: %s", cfg.Paths.CSVNormalized)
-		os.Exit(1)
+		return
 	}
 
-	// 如果没有指定输出路径，自动生成
-	if icsFilePath == "" || icsFilePath == "true" {
-		// 从第一个 CSV 文件推断文件名
-		name, id, sem := parseCSVFileName(filepath.Base(csvFiles[0]))
-		if studentName != "" {
-			name = studentName
-		}
-		if studentID != "" {
-			id = studentID
-		}
-		if semesterCode != "" {
-			sem = semesterCode
-		} else if sem == "" {
-			sem = cfg.Semester.Code
-		}
-		icsFilePath = fmt.Sprintf("%s_%s_%s_ics.ics", name, id, sem)
+	// 如果没有指定输出目录，使用默认
+	outputDir := icsFilePath
+	if outputDir == "" || outputDir == "true" {
+		outputDir = filepath.Join(cfg.Paths.Output, "ics")
 	}
 
 	// 确保输出目录存在
-	outputDir := filepath.Dir(icsFilePath)
-	if outputDir != "" && outputDir != "." {
-		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "创建输出目录失败: %v\n", err)
-			logError("创建输出目录失败: %v", err)
-			os.Exit(1)
-		}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "创建输出目录失败: %v\n", err)
+		logError("创建输出目录失败: %v", err)
+		return
 	}
 
-	// 处理所有 CSV 文件
-	generator := ics.NewGenerator(startDate, periodTimes, 15) // 15分钟提醒
-
+	// 为每个 CSV 生成 ICS
 	for _, csvFile := range csvFiles {
-		fmt.Printf("处理: %s\n", filepath.Base(csvFile))
+		generator := ics.NewGenerator(startDate, periodTimes, 15)
 		if err := generator.AddFromCSV(csvFile); err != nil {
-			fmt.Fprintf(os.Stderr, "  警告: 处理失败 %s: %v\n", csvFile, err)
+			fmt.Fprintf(os.Stderr, "  警告: 处理失败 %s: %v\n", filepath.Base(csvFile), err)
 			logError("ICS 处理 CSV 失败 [%s]: %v", csvFile, err)
+			continue
 		}
+
+		// 生成文件名
+		baseName := strings.TrimSuffix(filepath.Base(csvFile), ".csv")
+		parts := strings.Split(baseName, "_")
+		var icsFileName string
+		if len(parts) >= 3 {
+			icsFileName = fmt.Sprintf("%s_%s_%s_ics.ics", parts[0], parts[1], parts[2])
+		} else {
+			icsFileName = baseName + "_ics.ics"
+		}
+
+		icsPath := filepath.Join(outputDir, icsFileName)
+		if err := generator.Save(icsPath); err != nil {
+			fmt.Fprintf(os.Stderr, "  警告: 保存失败 %s: %v\n", icsFileName, err)
+			logError("ICS 保存失败 [%s]: %v", icsPath, err)
+			continue
+		}
+
+		fmt.Printf("✓ 已生成: %s (%d 个事件)\n", icsFileName, len(generator.Events))
 	}
 
-	// 生成 ICS 文件
-	if err := generator.Save(icsFilePath); err != nil {
-		fmt.Fprintf(os.Stderr, "生成 ICS 文件失败: %v\n", err)
-		logError("生成 ICS 文件失败: %v", err)
+	fmt.Printf("\n✓ ICS 批量导出完成，输出目录: %s\n", outputDir)
+}
+// 流程: .xls -> 简化 -> 拆分 -> 解析(CSV) -> ICS
+func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath string, skipAI bool) {
+	fmt.Println("=== ICS 日历导出模式（个人版）===\n")
+	fmt.Printf("输入文件: %s\n", filepath.Base(inputFile))
+
+	// 检查输入文件
+	if _, err := os.Stat(inputFile); err != nil {
+		fmt.Fprintf(os.Stderr, "错误: 输入文件不存在: %s\n", inputFile)
 		os.Exit(1)
 	}
 
-	fmt.Printf("\n✓ ICS 日历已生成: %s\n", icsFilePath)
+	// 创建临时目录
+	tempDir, err := os.MkdirTemp("", "stnet_ics_*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "创建临时目录失败: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// 步骤1: 简化 HTML
+	fmt.Println("[1/4] 简化 HTML...")
+	baseName := strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))
+	simplifiedFile := filepath.Join(tempDir, baseName+".html")
+	simplifier := simplify.NewSimplifier("", "", logError)
+	if err := simplifier.SimplifyFile(inputFile, simplifiedFile); err != nil {
+		fmt.Fprintf(os.Stderr, "HTML 简化失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 步骤2: 拆分课程/环节
+	fmt.Println("[2/4] 拆分课程和环节...")
+	splitter := split.NewSplitter(tempDir, tempDir, tempDir, cfg.Semester.Code)
+	result := splitter.SplitFile(simplifiedFile)
+	if result.Error != "" {
+		fmt.Fprintf(os.Stderr, "数据拆分失败: %s\n", result.Error)
+		os.Exit(1)
+	}
+
+	// 步骤3: 解析为 CSV
+	fmt.Println("[3/4] 解析课表...")
+	var courseCSVFile string
+
+	if result.Format == "list" {
+		// 列表格式直接解析
+		fmt.Println("      检测到列表格式，直接解析...")
+		parser := parser.NewListParser(tempDir, tempDir)
+		parseResult := parser.ParseFile(result.CourseFile)
+		if parseResult.Error != "" {
+			fmt.Fprintf(os.Stderr, "列表解析失败: %s\n", parseResult.Error)
+			os.Exit(1)
+		}
+		courseCSVFile = parseResult.CourseCSV
+	} else {
+		// 二维表需要 AI 解析
+		if skipAI {
+			fmt.Println("      检测到二维表格式，但已跳过 AI 解析")
+			fmt.Println("      提示: 去掉 -skip-ai 参数以使用 AI 解析二维表")
+			os.Exit(1)
+		}
+
+		fmt.Println("      检测到二维表格式，使用 AI 解析...")
+
+		// 获取 API 密钥
+		apiKey, err := config.GetAPIKey(filepath.Dir(configFilePath), config.GlobalOverride.AIKey)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取 API 密钥失败: %v\n", err)
+			fmt.Println("      提示: 使用 -aikey 参数指定密钥，或创建 config/api.key 文件")
+			os.Exit(1)
+		}
+
+		client := parser.NewDeepSeekClient(
+			apiKey,
+			cfg.AI.BaseURL,
+			cfg.AI.Model,
+			cfg.AI.MaxRetries,
+			cfg.AI.RequestInterval,
+		)
+
+		promptFilePath := config.GetPromptFilePath(filepath.Dir(configFilePath))
+		prompt, err := os.ReadFile(promptFilePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取 prompt 文件失败: %v\n", err)
+			os.Exit(1)
+		}
+
+		aiParser := parser.NewAI2DParser(tempDir, tempDir, promptFilePath, client, 1)
+		aiResult := aiParser.ParseFile(result.CourseFile, string(prompt))
+		if !aiResult.Success {
+			fmt.Fprintf(os.Stderr, "AI 解析失败: %s\n", aiResult.Error)
+			os.Exit(1)
+		}
+		courseCSVFile = aiResult.CourseCSV
+	}
+
+	// 步骤4: 生成 ICS
+	fmt.Println("[4/4] 生成 ICS 日历...")
+
+	// 解析学期开始日期
+	startDate, err := time.Parse("2006-01-02", cfg.Semester.StartDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "解析学期开始日期失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 验证开始日期是周一
+	if startDate.Weekday() != time.Monday {
+		fmt.Fprintf(os.Stderr, "错误: 学期开始日期 %s 不是周一\n", cfg.Semester.StartDate)
+		os.Exit(1)
+	}
+
+	// 构建时间段映射
+	periodTimes := buildPeriodTimes(cfg.TimeSlots)
+
+	// 如果没有指定输出路径，自动生成
+	if outputFile == "" {
+		// 从输入文件名推断
+		baseName := strings.TrimSuffix(filepath.Base(inputFile), ".xls")
+		parts := strings.Split(baseName, "_")
+		if len(parts) >= 3 {
+			outputFile = fmt.Sprintf("%s_%s_%s_ics.ics", parts[0], parts[1], parts[2])
+		} else {
+			outputFile = baseName + "_ics.ics"
+		}
+	}
+
+	// 生成 ICS
+	generator := ics.NewGenerator(startDate, periodTimes, 15)
+	if err := generator.AddFromCSV(courseCSVFile); err != nil {
+		fmt.Fprintf(os.Stderr, "添加课程到 ICS 失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := generator.Save(outputFile); err != nil {
+		fmt.Fprintf(os.Stderr, "保存 ICS 文件失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✓ ICS 日历已生成: %s\n", outputFile)
+	fmt.Printf("  共导出 %d 个课程事件\n", len(generator.Events))
 }
 
 // buildPeriodTimes 构建时间段映射
