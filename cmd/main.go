@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -368,10 +369,19 @@ func runExcel(cfg *config.Config) {
 		cfg.Excel,
 	)
 
-	// 生成主报表（包含汇总和每周）
-	if err := generator.Generate(); err != nil {
-		fmt.Fprintf(os.Stderr, "生成主 Excel 报表失败: %v\n", err)
-		logError("生成主 Excel 报表失败: %v", err)
+	// 生成汇总表（只包含汇总，放到final目录）
+	if err := generator.GenerateSummaryOnly(); err != nil {
+		fmt.Fprintf(os.Stderr, "生成汇总表失败: %v\n", err)
+		logError("生成汇总表失败: %v", err)
+		return
+	}
+
+	// 生成总表（包含汇总+所有周表），放到output根目录
+	fullScheduleFile := generateFullScheduleFileName(cfg.Semester.Code)
+	fullSchedulePath := filepath.Join(cfg.Paths.Output, fullScheduleFile)
+	if err := generator.GenerateFullSchedule(fullSchedulePath); err != nil {
+		fmt.Fprintf(os.Stderr, "生成总表失败: %v\n", err)
+		logError("生成总表失败: %v", err)
 		return
 	}
 
@@ -390,4 +400,29 @@ func runExcel(cfg *config.Config) {
 			}
 		}
 	}
+}
+
+// generateFullScheduleFileName 根据学期代码生成总表文件名
+// 学期代码格式: 20251 (2025-2026学年第二学期)
+// 文件名格式: 学生网管2025-2026学年第二学期无课表.xlsx
+func generateFullScheduleFileName(semesterCode string) string {
+	if len(semesterCode) < 5 {
+		return "学生网管无课表.xlsx"
+	}
+
+	// 提取年份和学期
+	year := semesterCode[:4]
+	semesterNum := semesterCode[4:]
+
+	// 计算下一学年
+	yearInt, _ := strconv.Atoi(year)
+	nextYear := yearInt + 1
+
+	// 学期名称
+	semesterName := "第一学期"
+	if semesterNum == "1" {
+		semesterName = "第二学期"
+	}
+
+	return fmt.Sprintf("学生网管%d-%d学年%s无课表.xlsx", yearInt, nextYear, semesterName)
 }

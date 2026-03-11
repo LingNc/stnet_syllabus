@@ -57,12 +57,35 @@ func NewGenerator(csvDir, outputDir string, totalWeeks int, excelConfig ...confi
 	return g
 }
 
-// Generate 生成 Excel 报表
-func (g *Generator) Generate() error {
+// GenerateSummaryOnly 只生成汇总表（free_time_schedule.xlsx）
+func (g *Generator) GenerateSummaryOnly() error {
 	if err := os.MkdirAll(g.OutputDir, 0755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %w", err)
 	}
 
+	// 创建新工作簿
+	f := excelize.NewFile()
+
+	// 添加汇总表
+	if err := g.addSummarySheet(f); err != nil {
+		return fmt.Errorf("添加汇总表失败: %w", err)
+	}
+
+	// 删除默认 Sheet
+	f.DeleteSheet("Sheet1")
+
+	// 保存文件
+	outputFile := filepath.Join(g.OutputDir, "free_time_schedule.xlsx")
+	if err := f.SaveAs(outputFile); err != nil {
+		return fmt.Errorf("保存 Excel 文件失败: %w", err)
+	}
+
+	fmt.Printf("✓ 已生成汇总表: %s\n", outputFile)
+	return nil
+}
+
+// GenerateFullSchedule 生成完整总表（汇总表+所有周表）
+func (g *Generator) GenerateFullSchedule(outputFile string) error {
 	// 创建新工作簿
 	f := excelize.NewFile()
 
@@ -89,12 +112,11 @@ func (g *Generator) Generate() error {
 	f.DeleteSheet("Sheet1")
 
 	// 保存文件
-	outputFile := filepath.Join(g.OutputDir, "free_time_schedule.xlsx")
 	if err := f.SaveAs(outputFile); err != nil {
 		return fmt.Errorf("保存 Excel 文件失败: %w", err)
 	}
 
-	fmt.Printf("✓ 已生成 Excel 报表: %s\n", outputFile)
+	fmt.Printf("✓ 已生成总表: %s\n", outputFile)
 	return nil
 }
 
