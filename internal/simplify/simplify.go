@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -358,36 +359,9 @@ func decodeGBK(data []byte) (string, error) {
 }
 
 // isValidUTF8 检测内容是否是有效的 UTF-8 编码
-// 通过检查是否包含 UTF-8 特有的多字节序列
+// 使用标准库的 utf8.Valid 进行严格检测
 func isValidUTF8(data []byte) bool {
-	// 如果内容全部是 ASCII（0-127），可能是 UTF-8 也可能是 GBK，优先按 UTF-8 处理
-	allASCII := true
-	for _, b := range data {
-		if b > 127 {
-			allASCII = false
-			break
-		}
-	}
-	if allASCII {
-		return true
-	}
-
-	// 检查是否包含有效的 UTF-8 多字节序列
-	// UTF-8 中文通常以 0xE4-0xEF 开头（3字节序列）
-	for i := 0; i < len(data); i++ {
-		if data[i] >= 0xE4 && data[i] <= 0xEF {
-			// 可能是 UTF-8 中文的开始字节
-			if i+2 < len(data) {
-				// 检查后续字节是否是有效的 UTF-8 续字节 (0x80-0xBF)
-				if data[i+1] >= 0x80 && data[i+1] <= 0xBF &&
-					data[i+2] >= 0x80 && data[i+2] <= 0xBF {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
+	return utf8.Valid(data)
 }
 
 // isBinaryContent 检测内容是否是二进制格式（如xlsx）
