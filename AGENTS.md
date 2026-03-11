@@ -384,11 +384,11 @@ stnet_syllabus/
   - 优先检测 UTF-8，如果不是则尝试 GBK 解码
   - 代码位置：`internal/simplify/simplify.go`
 
-### 2026-03-11 (fix - ICS 参数调整)
-- **调整 `-ics` 参数使用方式**:
-  - `-ics` 作为 bool 标志，启用 ICS 导出并使用 config 中的默认路径
-  - `-ics-dir <dir>` 用于指定自定义 ICS 输出目录（覆盖 config 中的路径）
-  - 避免 Go flag 包对可选值参数 `-ics /path` 解析成 `-ics -step` 的问题
+### 2026-03-11 (refactor - 简化 ICS 参数)
+- **简化 `-ics` 参数**：
+  - 删除 `-ics-dir` 参数
+  - `-ics` 既可作开关（无值使用默认路径），也可带路径（指定输出目录）
+  - 智能处理 `-ics -step` 这种用法：检测到值以 `-` 开头时自动使用默认路径
   - 代码位置：`cmd/main.go`
 
 ### 开发进度更新
