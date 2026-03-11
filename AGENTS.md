@@ -276,6 +276,27 @@ stnet_syllabus/
   - 人类可读的无课表（free_time_summary.csv）中人名分隔从顿号"、"改为空格" "
   - 代码位置：`internal/aggregate/aggregate.go:generateSummary()`
 
+### 2026-03-10 (feat - 第一列独立样式配置)
+- **添加第一列（节次列）独立样式配置**:
+  - 新增 `excel.first_column` 配置项
+  - 可独立设置字体大小、加粗、背景色、文字颜色、对齐方式、列宽
+  - 与其他列（周一到周五）的样式分离
+  - 代码位置：`internal/config/loader.go`, `internal/excel/excel.go`
+
+### 2026-03-10 (feat - 无环节数据检测)
+- **增加无环节数据检测功能**:
+  - 在 aggregate 步骤检测哪些学生没有环节（activity）数据
+  - 同时适用于列表格式和AI解析的2D表格式
+  - 警告信息输出到控制台和 error.log
+  - 代码位置：`internal/aggregate/aggregate.go:checkMissingActivities()`
+
+### 2026-03-11 (feat - 分离汇总表和总表文件)
+- **分离汇总表和总表文件**:
+  - `output/final/free_time_schedule.xlsx`: 只包含汇总表（1个sheet）
+  - `output/学生网管xxxx-xxxx学年第x学期无课表.xlsx`: 包含汇总表+所有周表
+  - 总表文件名根据学期代码自动生成（如20251→2025-2026学年第二学期）
+  - 代码位置：`cmd/main.go:generateFullScheduleFileName()`, `internal/excel/excel.go`
+
 ## 可用技能
 
 ### analysis-report
