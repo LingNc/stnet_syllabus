@@ -165,21 +165,28 @@ func (s *Splitter) parseFileName(fileName string) (name, studentID, semesterCode
 
 // detectFormat 检测格式
 func detectFormat(htmlContent string) string {
+	// 优先检查明确的 TYPE 标记（简化后的文件）
+	if strings.Contains(htmlContent, "<!-- TYPE: 2D_TABLE -->") {
+		return "2d"
+	}
+	if strings.Contains(htmlContent, "<!-- TYPE: COURSE -->") ||
+		strings.Contains(htmlContent, "<!-- TYPE: ACTIVITY -->") {
+		return "list"
+	}
 	// 检查原始标记（未简化的文件）
 	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
 		strings.Contains(htmlContent, "上课班级代码") {
 		return "list"
 	}
-	// 检查简化后的标记
-	if strings.Contains(htmlContent, "<!-- SEMESTER:") ||
-		strings.Contains(htmlContent, "<!-- TYPE: COURSE -->") ||
-		strings.Contains(htmlContent, "<!-- TYPE: ACTIVITY -->") {
+	// 检查简化后的其他标记
+	if strings.Contains(htmlContent, "<!-- SEMESTER:") {
+		// 有 SEMESTER 注释但没有 TYPE 标记，可能是 list 格式
 		return "list"
 	}
+	// 检查 2D 表原始标记
 	if strings.Contains(htmlContent, `id='mytable'`) ||
 		strings.Contains(htmlContent, `id="mytable"`) ||
-		strings.Contains(htmlContent, "div_nokb") ||
-		strings.Contains(htmlContent, "TYPE: 2D_TABLE") {
+		strings.Contains(htmlContent, "div_nokb") {
 		return "2d"
 	}
 	return "unknown"
