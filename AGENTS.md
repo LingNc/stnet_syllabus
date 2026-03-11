@@ -383,6 +383,13 @@ stnet_syllabus/
   - 优先检测 UTF-8，如果不是则尝试 GBK 解码
   - 代码位置：`internal/simplify/simplify.go`
 
+### 2026-03-11 (fix - split 格式检测修复)
+- **修复 split 模块格式检测顺序**：
+  - 原 detectFormat 函数先检查 `<!-- SEMESTER:` 导致 2D 表被误判为 list
+  - 调整检测顺序：优先检查明确的 `TYPE: 2D_TABLE` 和 `TYPE: COURSE/ACTIVITY` 标记
+  - 确保简化后的 2D 表能正确识别格式
+  - 代码位置：`internal/split/split.go`
+
 ### 2026-03-11 (refactor - ICS 参数简化)
 - **简化 `-ics` 参数**：
   - `-ics` 作为纯开关参数，不接收值
