@@ -1,18 +1,30 @@
 # 白名单
 /*
-*/
+/*/
 # !*/
 
 # 密钥文件
 api.key
 
+# Go modules - 必须版本控制
+!go.mod
+!go.sum
+
 # 核心文件夹
+!plan
 !config
 !example
+!internal
+!pkg
+!cmd
+
+# 工具
+!.agents
 
 # 基本文件夹
 !*code-workspace
 !.gitignore
+!README.md
 !AGENTS.md
 !PLAN.md
 !RULE.md
