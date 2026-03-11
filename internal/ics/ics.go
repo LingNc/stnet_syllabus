@@ -121,6 +121,11 @@ func (g *Generator) parseCourseRow(record []string, colMap map[string]int) error
 
 	sessionStr := strings.TrimSpace(record[sessionCol])
 
+	// 跳过未排课的课程（周次为*未排课*或节次为空）
+	if weekStr == "*未排课*" || sessionStr == "" {
+		return nil
+	}
+
 	// 解析节次
 	dayOfWeek, startPeriod, _, parity := parseTimeSlot(sessionStr)
 	if dayOfWeek < 0 {
