@@ -118,12 +118,17 @@
 ### 目录结构
 ```
 stnet_syllabus/
-├── config/              # 配置文件
-│   ├── config.yaml      # 全局配置
-│   ├── api.key          # API 密钥（gitignore）
-│   └── 二维表.prompt     # AI 提示词
-├── input/               # 输入数据
-├── output/              # 输出数据
+├── cmd/                 # 命令入口
+│   ├── main.go          # 主程序
+│   ├── embed.go         # 配置嵌入与初始化
+│   └── config/          # 嵌入的默认配置（go:embed）
+│       ├── config.yaml  # 全局配置模板
+│       ├── api.key      # API 密钥模板（示例）
+│       ├── 二维表.prompt # AI 提示词模板
+│       └── README.md    # 配置说明
+├── input/               # 输入数据（运行时创建）
+├── output/              # 输出数据（运行时创建）
+│   ├── ics/             # ICS 日历文件
 │   ├── temp/            # 临时文件
 │   │   ├── raw_xls/     # 重命名后的原始文件
 │   │   ├── simplified_xls/  # 精简后的 HTML
@@ -133,6 +138,11 @@ stnet_syllabus/
 │   ├── csv_normalized/  # 标准化 CSV
 │   ├── final/           # 最终 Excel 报表
 │   └── error.log        # 错误日志
+├── config/              # 运行时配置（-init生成，gitignore）
+│   ├── config.yaml      # 用户自定义配置
+│   ├── api.key          # 用户API密钥
+│   ├── 二维表.prompt     # AI提示词（可自定义）
+│   └── README.md        # 配置说明
 ├── internal/            # 内部包
 │   ├── preprocess/      # 数据预处理
 │   ├── simplify/        # HTML 精简
@@ -142,6 +152,7 @@ stnet_syllabus/
 │   ├── aggregate/       # 无课表聚合
 │   ├── weekly/          # 周次切片
 │   ├── excel/           # Excel 生成
+│   └── ics/             # ICS 日历生成
 │   └── ics/             # ICS 日历生成 (PLAN_1新增)
 ├── pkg/                 # 公共包
 │   ├── models/          # 数据模型
@@ -338,19 +349,39 @@ stnet_syllabus/
   - 代码位置：`cmd/embed.go`, `cmd/main.go`
 
 - **任务3: 支持标准 iCalendar (.ics) 日历文件导出**:
-  - 新增 `-ics` 参数：触发 ICS 日历导出模式
-  - 新增 `-ics-name`、`-ics-id`、`-ics-semester` 参数：指定 ICS 文件名信息
+  - **个人模式**: 新增 `-ics-input <file.xls>` 参数，直接从单个 xls 文件生成 ics
+  - **批量模式**: 新增 `-ics <dir>` 参数，在正常流程后批量生成所有 ics
   - 支持从标准化 CSV 生成 .ics 日历文件
   - 实现 RRULE 重复规则，兼容小米日历等标准日历应用
   - 支持课前提醒（默认15分钟）
   - 自动从 CSV 文件名推断学生信息生成默认 ICS 文件名
-  - 代码位置：`internal/ics/ics.go`, `cmd/main.go:runICSExport()`
+  - 代码位置：`internal/ics/ics.go`, `cmd/main.go:runICSExport()`, `cmd/main.go:runICSSingleFile()`
+
+- **新增 ICS 输出路径配置**:
+  - 在 `config.yaml` 的 `paths` 中添加 `ics` 配置项
+  - 默认输出到 `./output/ics`
+  - 代码位置：`internal/config/loader.go`, `cmd/config/config.yaml`
 
 - **配置加载增强**:
   - 新增 `config.CLIOverride` 结构体管理 CLI 参数覆盖
   - 修改 `config.Load()` 函数支持 CLI 覆盖
   - 新增 `config.GetPromptFilePath()` 和增强的 `config.GetAPIKey()` 支持自定义路径
   - 当未指定配置文件时，自动检查默认路径或提示用户使用 `-init`
+
+### 2026-03-11 (chore - 配置目录重构)
+- **重构配置目录结构**:
+  - 移除根目录 `config/`，改为 `cmd/config/` 用于 `go:embed` 嵌入
+  - 根目录 `config/` 是运行时 `-init` 生成的，不应提交到版本控制
+  - 添加示例 `api.key` 文件到 `cmd/config/`，方便用户 init 后直接填入密钥
+  - 更新 `.gitignore` 排除根目录 `config/`
+  - 更新 `cmd/config/README.md` 说明配置文件的两种位置
+
+### 2026-03-11 (fix - UTF-8编码检测)
+- **修复 simplify 模块编码检测**:
+  - 新增 `isValidUTF8()` 函数检测文件是否已经是 UTF-8 编码
+  - 修复对 UTF-8 文件错误进行 GBK 解码导致乱码的问题
+  - 优先检测 UTF-8，如果不是则尝试 GBK 解码
+  - 代码位置：`internal/simplify/simplify.go`
 
 ### 开发进度更新
 - [x] 任务1: CLI 参数覆盖与优先级
