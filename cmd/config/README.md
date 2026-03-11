@@ -1,8 +1,31 @@
 # 配置文件说明
 
-本目录包含系统运行所需的配置文件。
+本目录包含系统运行所需的默认配置文件模板，通过 `go:embed` 嵌入到程序二进制中。
+
+**使用流程**：
+1. 首次运行时使用 `./stnet_syllabus -init` 在当前目录生成 `config/` 文件夹
+2. 在生成的 `./config/api.key` 中填入你的 API 密钥
+3. 根据需要修改 `./config/config.yaml`
+
+---
 
 ## 文件清单
+
+### api.key（最重要）
+DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方config.yaml中配置）。
+
+**注意区分两个位置的 api.key**：
+- **本目录的 `api.key`**：示例模板，已包含在程序中，首次 `-init` 时复制到运行目录
+- **运行目录的 `./config/api.key`**：你个人的密钥文件，**切勿提交到 Git**
+
+格式要求：
+- 第一行非注释行为有效密钥
+- 以 # 开头的行为注释，会被忽略
+- 示例：
+  ```
+  # 这是注释
+  sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  ```
 
 ### config.yaml
 系统主配置文件，包含以下配置项：
@@ -39,18 +62,6 @@
   - data: 数据行样式（行高、自动换行）
   - column: 列宽设置（最小/最大宽度、字符系数）
   - table: 表格内容（max_periods: 节次数量，4=1-8节，5=1-10节）
-
-### api.key
-DeepSeek API密钥文件。
-
-格式要求：
-- 第一行非注释行为有效密钥
-- 以 # 开头的行为注释，会被忽略
-- 示例：
-  ```
-  # 这是注释
-  sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  ```
 
 ### 二维表.prompt
 AI提示词文件，用于指导DeepSeek解析二维表格式课表。

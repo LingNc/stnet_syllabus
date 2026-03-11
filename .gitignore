@@ -19,6 +19,7 @@ api.key
 
 # 注意：根目录的 config/ 是运行时 -init 生成的，不应提交
 # cmd/config/ 是嵌入的默认配置，已包含在白名单内
+!/cmd/config/api.key
 
 # 工具
 !.agents
