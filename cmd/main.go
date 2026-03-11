@@ -531,7 +531,11 @@ func runICSExport(cfg *config.Config, icsFilePath string) {
 	// 如果没有指定输出目录，使用默认
 	outputDir := icsFilePath
 	if outputDir == "" || outputDir == "true" {
-		outputDir = filepath.Join(cfg.Paths.Output, "ics")
+		if cfg.Paths.ICS != "" {
+			outputDir = cfg.Paths.ICS
+		} else {
+			outputDir = filepath.Join(cfg.Paths.Output, "ics")
+		}
 	}
 
 	// 确保输出目录存在

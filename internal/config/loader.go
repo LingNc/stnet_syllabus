@@ -62,6 +62,7 @@ type AIConfig struct {
 type PathsConfig struct {
 	Input           string `yaml:"input"`
 	Output          string `yaml:"output"`
+	ICS             string `yaml:"ics"`
 	TempRaw         string `yaml:"temp_raw"`
 	TempSimplified  string `yaml:"temp_simplified"`
 	TempSplit2D     string `yaml:"temp_split_2d"`

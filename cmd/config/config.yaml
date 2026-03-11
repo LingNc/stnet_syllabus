@@ -48,6 +48,8 @@ paths:
   input: "./input"
   # 输出根目录
   output: "./output"
+  # ICS 日历输出目录
+  ics: "./output/ics"
   # 临时目录
   temp_raw: "./output/temp/raw_xls"
   temp_simplified: "./output/temp/simplified_xls"
