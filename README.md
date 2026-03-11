@@ -12,6 +12,7 @@
 - **空闲时间统计**: 生成机器可读和人类可读的无课表
 - **周次切片**: 生成每周独立的无课表
 - **Excel 报表**: 美观的 Excel 工作簿输出
+- **ICS 日历导出**: 支持批量和个人模式导出 iCalendar 格式
 
 ## 快速开始
 
@@ -38,8 +39,14 @@ go mod tidy
 # 编译程序
 go build -o stnet_syllabus ./cmd
 
+# 初始化配置（首次运行）
+./stnet_syllabus -init
+
 # 执行完整流程
 ./stnet_syllabus
+
+# 执行完整流程并生成 ICS 日历
+./stnet_syllabus -ics
 
 # 执行特定步骤
 ./stnet_syllabus -step preprocess    # 数据预处理
@@ -50,24 +57,42 @@ go build -o stnet_syllabus ./cmd
 ./stnet_syllabus -step aggregate     # 空闲时间聚合
 ./stnet_syllabus -step weekly        # 周次切片
 ./stnet_syllabus -step excel         # Excel 生成
+./stnet_syllabus -step ics           # ICS 批量导出
+
+# 个人模式：从单个 xls 生成 ics
+./stnet_syllabus -ics-input input/张三_202401010101_20251.xls -ics-output output/张三.ics
 
 # 跳过 AI 解析（仅处理列表格式）
 ./stnet_syllabus -skip-ai
+
+# CLI 参数覆盖配置
+./stnet_syllabus -input ./data -output ./out
+./stnet_syllabus -aikey YOUR_API_KEY
+./stnet_syllabus -semester-start 2026-03-02
 ```
 
 ## 项目结构
 
 ```
 stnet_syllabus/
-├── config/              # 配置文件
-│   ├── config.yaml      # 全局配置
-│   ├── api.key          # API 密钥（gitignore）
-│   └── 二维表.prompt     # AI 提示词
+├── cmd/                 # 命令入口
+│   ├── main.go          # 主程序
+│   ├── embed.go         # 配置嵌入
+│   └── config/          # 默认配置（go:embed）
+│       ├── config.yaml
+│       ├── 二维表.prompt
+│       └── api.key
+├── config/              # 运行时配置（-init 生成，gitignore）
+│   ├── config.yaml
+│   ├── 二维表.prompt
+│   └── api.key
 ├── input/               # 输入数据
 ├── output/              # 输出数据
+│   ├── ics/             # ICS 日历文件
 │   ├── temp/            # 临时文件
 │   ├── csv_normalized/  # 标准化 CSV
 │   ├── final/           # 最终 Excel 报表
+│   ├── weekly/          # 每周无课表
 │   └── error.log        # 错误日志
 ├── internal/            # 内部包
 │   ├── preprocess/      # 数据预处理
@@ -77,12 +102,15 @@ stnet_syllabus/
 │   ├── parser/          # 解析器（含 AI 调用）
 │   ├── aggregate/       # 无课表聚合
 │   ├── weekly/          # 周次切片
-│   └── excel/           # Excel 生成
+│   ├── excel/           # Excel 生成
+│   ├── ics/             # ICS 日历生成
+│   └── config/          # 配置加载
 ├── pkg/                 # 公共包
 │   ├── models/          # 数据模型
 │   └── utils/           # 工具函数
-└── cmd/
-    └── main.go          # 主程序入口
+└── plan/                # 开发计划文档
+    ├── PLAN_0.md
+    └── PLAN_1.md
 ```
 
 ## 配置说明
@@ -106,8 +134,27 @@ ai:
 paths:
   input: "./input"
   output: "./output"
+  ics: "./output/ics"              # ICS 输出目录
   # ... 其他路径配置
 ```
+
+## CLI 参数
+
+支持命令行参数覆盖配置文件：
+
+| 参数 | 说明 |
+|------|------|
+| `-config <path>` | 指定配置文件路径 |
+| `-input <path>` | 输入目录（覆盖配置） |
+| `-output <path>` | 输出目录（覆盖配置） |
+| `-aikey <key>` | API 密钥（覆盖配置） |
+| `-semester-start <date>` | 学期开始日期（YYYY-MM-DD） |
+| `-skip-ai` | 跳过 AI 解析 |
+| `-ics` | 启用 ICS 导出（批量模式） |
+| `-ics-input <file>` | 个人模式：输入 xls 文件 |
+| `-ics-output <file>` | 个人模式：输出 ics 文件 |
+| `-init` | 初始化配置目录 |
+| `-init-force` | 强制覆盖已有配置 |
 
 ## CSV 格式规范
 
@@ -143,6 +190,9 @@ paths:
 - [x] 空闲时间聚合
 - [x] 周次切片
 - [x] Excel 生成
+- [x] CLI 参数覆盖
+- [x] `-init` 零配置启动
+- [x] ICS 日历导出
 - [ ] 单元测试
 - [ ] 集成测试
 - [ ] 性能优化

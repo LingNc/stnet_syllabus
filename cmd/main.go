@@ -78,7 +78,7 @@ func main() {
 		semesterStart = flag.String("semester-start", "", "学期开始日期（格式: YYYY-MM-DD，覆盖配置文件）")
 
 		// ICS 导出参数
-		icsOutputDir  = flag.String("ics", "", "ICS 输出目录（留空使用config中的路径，指定路径则覆盖）")
+		icsEnabled    = flag.Bool("ics", false, "启用 ICS 日历批量导出（在正常流程后生成所有ics）")
 		icsInputFile  = flag.String("ics-input", "", "输入的 .xls 课表文件路径（个人模式：直接从xls生成ics）")
 		icsOutputFile = flag.String("ics-output", "", "输出 ICS 文件路径（个人模式使用）")
 
@@ -153,22 +153,9 @@ func main() {
 	case "all":
 		runAll(cfg, *skipAI)
 		// 如果指定了 -ics 参数，在批量流程后生成 ICS
-		icsDir := *icsOutputDir
-		icsSpecified := false
-		// 检查原始参数中是否有 -ics
-		for i, arg := range os.Args {
-			if arg == "-ics" || strings.HasPrefix(arg, "-ics=") {
-				icsSpecified = true
-				// 如果是 -ics 后面直接跟其他 flag（如 -ics -step），值会被误解析为 "-step"
-				if icsDir != "" && icsDir[0] == '-' && !strings.Contains(os.Args[i], "=") {
-					icsDir = ""
-				}
-				break
-			}
-		}
-		if icsSpecified {
+		if *icsEnabled {
 			fmt.Println("\n" + strings.Repeat("=", 40))
-			runICSExport(cfg, icsDir)
+			runICSExport(cfg, "")
 		}
 	case "preprocess":
 		runPreprocess(cfg)
