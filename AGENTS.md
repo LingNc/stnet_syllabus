@@ -100,6 +100,11 @@
 - [x] Step 7: 周次维度的视图切片 (internal/weekly/)
 - [x] Step 8: Excel 最终报表构建 (internal/excel/)
 - [x] 主程序入口 (cmd/main.go)
+- [x] **PLAN_1 新增功能**
+  - [x] CLI 参数优先级覆盖 (input, output, aikey, prompt, apikey-file, semester-start)
+  - [x] `-init` 零配置启动 (go:embed 嵌入默认配置)
+  - [x] ICS 日历导出 (internal/ics/)
+  - [x] 增强的配置加载 (支持 CLI 覆盖)
 
 ### 待测试
 - [ ] AI 解析准确性测试
@@ -136,7 +141,8 @@ stnet_syllabus/
 │   ├── parser/          # 解析器（含 AI 调用）
 │   ├── aggregate/       # 无课表聚合
 │   ├── weekly/          # 周次切片
-│   └── excel/           # Excel 生成
+│   ├── excel/           # Excel 生成
+│   └── ics/             # ICS 日历生成 (PLAN_1新增)
 ├── pkg/                 # 公共包
 │   ├── models/          # 数据模型
 │   └── utils/           # 工具函数
@@ -156,6 +162,8 @@ stnet_syllabus/
 5. csv_normalized/ (标准化 CSV)
    ↓
 6. output/final/ (Excel 报表)
+   ↓
+7. **ICS 导出模式**: csv_normalized/ → .ics 日历文件 (PLAN_1新增)
 
 ---
 
@@ -188,6 +196,20 @@ stnet_syllabus/
 - 指定模型 `deepseek-chat`
 - API 密钥必须与代码解耦，读取自 `config/api.key`
 - 支持注释行（以 `#` 开头的行将被跳过）
+- 支持 CLI 参数 `-aikey` 覆盖，支持 `-apikey-file` 指定自定义密钥文件
+
+### 6. CLI 参数优先级
+参数优先级从高到低：
+1. 命令行参数（如 `-input`, `-output`, `-aikey`）
+2. 配置文件（config.yaml）
+3. 内置默认值
+
+### 7. ICS 日历导出
+- 支持从标准化 CSV 生成标准 iCalendar (.ics) 格式
+- 使用 RRULE 重复规则实现循环课程事件
+- 时区：Asia/Shanghai
+- 课前提醒：默认 15 分钟
+- 兼容小米日历及其他标准日历应用
 
 ---
 
@@ -296,6 +318,44 @@ stnet_syllabus/
   - `output/学生网管xxxx-xxxx学年第x学期无课表.xlsx`: 包含汇总表+所有周表
   - 总表文件名根据学期代码自动生成（如20251→2025-2026学年第二学期）
   - 代码位置：`cmd/main.go:generateFullScheduleFileName()`, `internal/excel/excel.go`
+
+### 2026-03-11 (feat - PLAN_1 实现)
+- **任务1: 构建灵活的命令行接口 (CLI) 与参数优先级覆盖**:
+  - 新增 `-input` 参数：指定输入目录路径（覆盖配置文件）
+  - 新增 `-output` 参数：指定输出目录路径（覆盖配置文件）
+  - 新增 `-aikey` 参数：指定 AI API 密钥（覆盖配置文件和 api.key）
+  - 新增 `-prompt` 参数：指定 AI Prompt 文件路径
+  - 新增 `-apikey-file` 参数：指定 API 密钥文件路径
+  - 新增 `-semester-start` 参数：指定学期开始日期
+  - 命令行参数优先级：CLI > 配置文件 > 默认值
+  - 代码位置：`cmd/main.go`, `internal/config/loader.go:CLIOverride`
+
+- **任务2: 实现 `-init` 零配置启动与脚手架生成**:
+  - 新增 `-init` 参数：在当前目录创建 config/ 并释放默认配置
+  - 新增 `-init-force` 参数：强制覆盖已存在的配置文件
+  - 使用 `go:embed` 嵌入默认配置文件到二进制
+  - 默认配置包括：config.yaml、二维表.prompt、README.md
+  - 代码位置：`cmd/embed.go`, `cmd/main.go`
+
+- **任务3: 支持标准 iCalendar (.ics) 日历文件导出**:
+  - 新增 `-ics` 参数：触发 ICS 日历导出模式
+  - 新增 `-ics-name`、`-ics-id`、`-ics-semester` 参数：指定 ICS 文件名信息
+  - 支持从标准化 CSV 生成 .ics 日历文件
+  - 实现 RRULE 重复规则，兼容小米日历等标准日历应用
+  - 支持课前提醒（默认15分钟）
+  - 自动从 CSV 文件名推断学生信息生成默认 ICS 文件名
+  - 代码位置：`internal/ics/ics.go`, `cmd/main.go:runICSExport()`
+
+- **配置加载增强**:
+  - 新增 `config.CLIOverride` 结构体管理 CLI 参数覆盖
+  - 修改 `config.Load()` 函数支持 CLI 覆盖
+  - 新增 `config.GetPromptFilePath()` 和增强的 `config.GetAPIKey()` 支持自定义路径
+  - 当未指定配置文件时，自动检查默认路径或提示用户使用 `-init`
+
+### 开发进度更新
+- [x] 任务1: CLI 参数覆盖与优先级
+- [x] 任务2: `-init` 零配置启动
+- [x] 任务3: ICS 日历导出
 
 ## 可用技能
 

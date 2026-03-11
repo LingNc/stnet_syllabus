@@ -16,6 +16,7 @@ import (
 	"stnet_syllabus/internal/aggregate"
 	"stnet_syllabus/internal/config"
 	"stnet_syllabus/internal/excel"
+	"stnet_syllabus/internal/ics"
 	"stnet_syllabus/internal/parser"
 	"stnet_syllabus/internal/preprocess"
 	"stnet_syllabus/internal/simplify"
@@ -59,14 +60,72 @@ func logError(format string, args ...interface{}) {
 func main() {
 	// 解析命令行参数
 	var (
-		configFile = flag.String("config", "config/config.yaml", "配置文件路径")
-		step       = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel")
+		// 基本参数
+		configFile = flag.String("config", "", "配置文件路径（可选，默认使用嵌入配置或当前目录config/）")
+		step       = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel|ics")
 		skipAI     = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
+
+		// 路径覆盖参数
+		inputPath  = flag.String("input", "", "输入目录路径（覆盖配置文件）")
+		outputPath = flag.String("output", "", "输出目录路径（覆盖配置文件）")
+
+		// AI 相关参数
+		aiKey          = flag.String("aikey", "", "AI API 密钥（覆盖配置文件和 api.key 文件）")
+		promptFilePath = flag.String("prompt", "", "AI Prompt 文件路径（覆盖默认路径）")
+		apiKeyFilePath = flag.String("apikey-file", "", "API 密钥文件路径（覆盖默认路径）")
+
+		// 学期相关参数
+		semesterStart = flag.String("semester-start", "", "学期开始日期（格式: YYYY-MM-DD，覆盖配置文件）")
+
+		// ICS 导出参数
+		icsFile       = flag.String("ics", "", "导出 ICS 日历文件路径（触发 ICS 导出模式）")
+		icsStudentName = flag.String("ics-name", "", "学生姓名（用于 ICS 文件名，未指定时从输入文件推断）")
+		icsStudentID   = flag.String("ics-id", "", "学生学号（用于 ICS 文件名，未指定时从输入文件推断）")
+		icsSemester    = flag.String("ics-semester", "", "学期代码（用于 ICS 文件名，未指定时从配置推断）")
+
+		// 初始化参数
+		initFlag    = flag.Bool("init", false, "初始化配置目录（在当前目录创建 config/ 并释放默认配置）")
+		initForce   = flag.Bool("init-force", false, "强制覆盖已存在的配置文件")
 	)
 	flag.Parse()
 
+	// 处理 -init 参数
+	if *initFlag {
+		if err := InitConfig(".", *initForce); err != nil {
+			fmt.Fprintf(os.Stderr, "初始化配置失败: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// 如果没有指定配置文件，检查默认路径
+	if *configFile == "" {
+		defaultConfig := "config/config.yaml"
+		if _, err := os.Stat(defaultConfig); err == nil {
+			*configFile = defaultConfig
+		} else {
+			fmt.Fprintf(os.Stderr, "错误: 未找到默认配置文件 %s\n", defaultConfig)
+			fmt.Fprintf(os.Stderr, "请使用 -config 指定配置文件路径，或使用 -init 初始化默认配置\n")
+			fmt.Fprintf(os.Stderr, "\n示例:\n")
+			fmt.Fprintf(os.Stderr, "  %s -init                    # 初始化配置\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  %s -config /path/to/config.yaml  # 指定配置文件\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  %s -input ./data -output ./out   # 使用命令行参数运行（无需配置文件）\n", os.Args[0])
+			os.Exit(1)
+		}
+	}
+
+	// 设置 CLI 覆盖值
+	config.GlobalOverride = &config.CLIOverride{
+		InputPath:       *inputPath,
+		OutputPath:      *outputPath,
+		AIKey:           *aiKey,
+		PromptFilePath:  *promptFilePath,
+		APIKeyFilePath:  *apiKeyFilePath,
+		SemesterStart:   *semesterStart,
+	}
+
 	// 加载配置
-	cfg, err := config.Load(*configFile)
+	cfg, err := config.Load(*configFile, config.GlobalOverride)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
 		os.Exit(1)
@@ -83,6 +142,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "初始化错误日志失败: %v\n", err)
 	}
 	defer closeErrorLog()
+
+	// 处理 ICS 导出模式
+	if *icsFile != "" || *step == "ics" {
+		runICSExport(cfg, *icsFile, *icsStudentName, *icsStudentID, *icsSemester)
+		return
+	}
 
 	// 根据步骤执行
 	switch *step {
@@ -106,7 +171,7 @@ func main() {
 		runExcel(cfg)
 	default:
 		fmt.Fprintf(os.Stderr, "未知步骤: %s\n", *step)
-		fmt.Fprintf(os.Stderr, "可用步骤: all, preprocess, simplify, validate, split, parse, aggregate, weekly, excel\n")
+		fmt.Fprintf(os.Stderr, "可用步骤: all, preprocess, simplify, validate, split, parse, aggregate, weekly, excel, ics\n")
 		os.Exit(1)
 	}
 }
@@ -274,7 +339,7 @@ func runParse(cfg *config.Config, skipAI bool) {
 
 	// 解析二维表（AI）
 	if !skipAI {
-		apiKey, err := config.GetAPIKey(filepath.Dir(cfg.Paths.Input) + "/config")
+		apiKey, err := config.GetAPIKey(filepath.Dir(cfg.Paths.Input)+"/config", config.GlobalOverride.AIKey)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "读取 API 密钥失败: %v\n", err)
 			logError("读取 API 密钥失败: %v", err)
@@ -290,10 +355,13 @@ func runParse(cfg *config.Config, skipAI bool) {
 			cfg.AI.RequestInterval,
 		)
 
+		// 使用新的方法获取 Prompt 文件路径
+		promptFilePath := config.GetPromptFilePath(filepath.Dir(cfg.Paths.Input) + "/config")
+
 		aiParser := parser.NewAI2DParser(
 			cfg.Paths.TempSplit2D,
 			cfg.Paths.CSVNormalized,
-			filepath.Join(filepath.Dir(cfg.Paths.Input), "config", "二维表.prompt"),
+			promptFilePath,
 			client,
 			cfg.AI.Concurrency,
 		)
@@ -425,4 +493,143 @@ func generateFullScheduleFileName(semesterCode string) string {
 	}
 
 	return fmt.Sprintf("学生网管%d-%d学年%s无课表.xlsx", yearInt, nextYear, semesterName)
+}
+
+// runICSExport 执行 ICS 日历导出
+func runICSExport(cfg *config.Config, icsFilePath, studentName, studentID, semesterCode string) {
+	fmt.Println("=== ICS 日历导出模式 ===\n")
+
+	// 解析学期开始日期
+	startDate, err := time.Parse("2006-01-02", cfg.Semester.StartDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "解析学期开始日期失败: %v\n", err)
+		logError("解析学期开始日期失败: %v", err)
+		os.Exit(1)
+	}
+
+	// 验证开始日期是周一
+	if startDate.Weekday() != time.Monday {
+		fmt.Fprintf(os.Stderr, "错误: 学期开始日期 %s 不是周一\n", cfg.Semester.StartDate)
+		logError("学期开始日期不是周一: %s", cfg.Semester.StartDate)
+		os.Exit(1)
+	}
+
+	// 构建时间段映射
+	periodTimes := buildPeriodTimes(cfg.TimeSlots)
+
+	// 查找输入的 CSV 文件
+	csvFiles := findCSVCourseFiles(cfg.Paths.CSVNormalized)
+	if len(csvFiles) == 0 {
+		fmt.Fprintf(os.Stderr, "错误: 在 %s 中未找到课程 CSV 文件\n", cfg.Paths.CSVNormalized)
+		logError("未找到课程 CSV 文件: %s", cfg.Paths.CSVNormalized)
+		os.Exit(1)
+	}
+
+	// 如果没有指定输出路径，自动生成
+	if icsFilePath == "" || icsFilePath == "true" {
+		// 从第一个 CSV 文件推断文件名
+		name, id, sem := parseCSVFileName(filepath.Base(csvFiles[0]))
+		if studentName != "" {
+			name = studentName
+		}
+		if studentID != "" {
+			id = studentID
+		}
+		if semesterCode != "" {
+			sem = semesterCode
+		} else if sem == "" {
+			sem = cfg.Semester.Code
+		}
+		icsFilePath = fmt.Sprintf("%s_%s_%s_ics.ics", name, id, sem)
+	}
+
+	// 确保输出目录存在
+	outputDir := filepath.Dir(icsFilePath)
+	if outputDir != "" && outputDir != "." {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "创建输出目录失败: %v\n", err)
+			logError("创建输出目录失败: %v", err)
+			os.Exit(1)
+		}
+	}
+
+	// 处理所有 CSV 文件
+	generator := ics.NewGenerator(startDate, periodTimes, 15) // 15分钟提醒
+
+	for _, csvFile := range csvFiles {
+		fmt.Printf("处理: %s\n", filepath.Base(csvFile))
+		if err := generator.AddFromCSV(csvFile); err != nil {
+			fmt.Fprintf(os.Stderr, "  警告: 处理失败 %s: %v\n", csvFile, err)
+			logError("ICS 处理 CSV 失败 [%s]: %v", csvFile, err)
+		}
+	}
+
+	// 生成 ICS 文件
+	if err := generator.Save(icsFilePath); err != nil {
+		fmt.Fprintf(os.Stderr, "生成 ICS 文件失败: %v\n", err)
+		logError("生成 ICS 文件失败: %v", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✓ ICS 日历已生成: %s\n", icsFilePath)
+}
+
+// buildPeriodTimes 构建时间段映射
+func buildPeriodTimes(timeSlots []config.TimeSlotConfig) map[int]map[string]string {
+	periodTimes := make(map[int]map[string]string)
+
+	for _, slot := range timeSlots {
+		// 解析节次（如 "1-2" -> 1, 3-4 -> 2 等）
+		parts := strings.Split(slot.Period, "-")
+		if len(parts) == 2 {
+			startPeriod, _ := strconv.Atoi(parts[0])
+			periodIdx := (startPeriod + 1) / 2 // 1-2->1, 3-4->2, 等等
+
+			periodTimes[periodIdx] = map[string]string{
+				"start": slot.Start,
+				"end":   slot.End,
+			}
+		}
+	}
+
+	return periodTimes
+}
+
+// findCSVCourseFiles 查找所有课程 CSV 文件
+func findCSVCourseFiles(dir string) []string {
+	var files []string
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return files
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(strings.ToLower(name), ".csv") &&
+			!strings.Contains(name, "activity") &&
+			!strings.Contains(name, "free_time") {
+			files = append(files, filepath.Join(dir, name))
+		}
+	}
+
+	return files
+}
+
+// parseCSVFileName 从 CSV 文件名解析信息
+// 格式: 姓名_学号_学期_course.csv
+func parseCSVFileName(fileName string) (name, studentID, semester string) {
+	baseName := strings.TrimSuffix(fileName, ".csv")
+	parts := strings.Split(baseName, "_")
+
+	if len(parts) >= 3 {
+		name = parts[0]
+		studentID = parts[1]
+		semester = parts[2]
+	}
+
+	return
 }
