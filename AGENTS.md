@@ -349,8 +349,9 @@ stnet_syllabus/
   - 代码位置：`cmd/embed.go`, `cmd/main.go`
 
 - **任务3: 支持标准 iCalendar (.ics) 日历文件导出**:
-  - **个人模式**: 新增 `-ics-input <file.xls>` 参数，直接从单个 xls 文件生成 ics
-  - **批量模式**: 新增 `-ics <dir>` 参数，在正常流程后批量生成所有 ics
+  - **个人模式**: 新增 `-ics-input <file.xls> -ics-output <file.ics>` 参数，直接从单个 xls 文件生成 ics
+  - **批量模式**: 新增 `-ics` 参数，在正常流程后批量生成所有 ics（使用 config 中的 ics 路径）
+  - **自定义路径**: 新增 `-ics-dir <dir>` 参数，指定 ICS 输出目录（覆盖 config 中的路径）
   - 支持从标准化 CSV 生成 .ics 日历文件
   - 实现 RRULE 重复规则，兼容小米日历等标准日历应用
   - 支持课前提醒（默认15分钟）
@@ -382,6 +383,13 @@ stnet_syllabus/
   - 修复对 UTF-8 文件错误进行 GBK 解码导致乱码的问题
   - 优先检测 UTF-8，如果不是则尝试 GBK 解码
   - 代码位置：`internal/simplify/simplify.go`
+
+### 2026-03-11 (fix - ICS 参数调整)
+- **调整 `-ics` 参数使用方式**:
+  - `-ics` 作为 bool 标志，启用 ICS 导出并使用 config 中的默认路径
+  - `-ics-dir <dir>` 用于指定自定义 ICS 输出目录（覆盖 config 中的路径）
+  - 避免 Go flag 包对可选值参数 `-ics /path` 解析成 `-ics -step` 的问题
+  - 代码位置：`cmd/main.go`
 
 ### 开发进度更新
 - [x] 任务1: CLI 参数覆盖与优先级
