@@ -78,8 +78,10 @@ func main() {
 		semesterStart = flag.String("semester-start", "", "学期开始日期（格式: YYYY-MM-DD，覆盖配置文件）")
 
 		// ICS 导出参数
+		icsEnabled    = flag.Bool("ics", false, "启用 ICS 日历批量导出（在正常流程后生成所有ics）")
+		icsOutputDir  = flag.String("ics-dir", "", "ICS 输出目录（覆盖配置文件中的路径）")
 		icsInputFile  = flag.String("ics-input", "", "输入的 .xls 课表文件路径（个人模式：直接从xls生成ics）")
-		icsOutputFile = flag.String("ics", "", "导出 ICS 日历文件路径（批量模式：在正常流程中生成所有ics）")
+		icsOutputFile = flag.String("ics-output", "", "输出 ICS 文件路径（个人模式使用）")
 
 		// 初始化参数
 		initFlag    = flag.Bool("init", false, "初始化配置目录（在当前目录创建 config/ 并释放默认配置）")
@@ -152,9 +154,9 @@ func main() {
 	case "all":
 		runAll(cfg, *skipAI)
 		// 如果指定了 -ics 参数，在批量流程后生成 ICS
-		if *icsOutputFile != "" {
+		if *icsEnabled {
 			fmt.Println("\n" + strings.Repeat("=", 40))
-			runICSExport(cfg, *icsOutputFile)
+			runICSExport(cfg, *icsOutputDir)
 		}
 	case "preprocess":
 		runPreprocess(cfg)
