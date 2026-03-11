@@ -26,7 +26,7 @@ time_slots:
     start: "16:30"
     end: "18:10"
   - period: "9-10"
-    start: "1930"
+    start: "19:30"
     end: "21:30"
 
 # AI 接口配置
