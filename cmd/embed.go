@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -40,7 +41,7 @@ func InitConfig(targetDir string, force bool) error {
 		}
 
 		// 读取嵌入的文件内容
-		data, err := EmbedFS.ReadFile(filepath.Join("config", fileName))
+		data, err := EmbedFS.ReadFile(path.Join("config", fileName))
 		if err != nil {
 			return fmt.Errorf("读取嵌入文件 %s 失败: %w", fileName, err)
 		}
