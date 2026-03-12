@@ -211,6 +211,16 @@ func (g *Generator) Save(outputPath string) error {
 	builder.WriteString("METHOD:PUBLISH\r\n")
 	builder.WriteString("X-WR-TIMEZONE:Asia/Shanghai\r\n")
 
+	// 写入时区定义
+	builder.WriteString("BEGIN:VTIMEZONE\r\n")
+	builder.WriteString("TZID:Asia/Shanghai\r\n")
+	builder.WriteString("BEGIN:STANDARD\r\n")
+	builder.WriteString("DTSTART:19700101T000000\r\n")
+	builder.WriteString("TZOFFSETFROM:+0800\r\n")
+	builder.WriteString("TZOFFSETTO:+0800\r\n")
+	builder.WriteString("END:STANDARD\r\n")
+	builder.WriteString("END:VTIMEZONE\r\n")
+
 	// 写入所有事件
 	for _, event := range g.Events {
 		g.writeEvent(&builder, event)
