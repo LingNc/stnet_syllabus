@@ -174,6 +174,7 @@ func main() {
 	case "excel":
 		runExcel(cfg)
 	default:
+		logError("未知步骤: %s", *step)
 		fmt.Fprintf(os.Stderr, "未知步骤: %s\n", *step)
 		fmt.Fprintf(os.Stderr, "可用步骤: all, preprocess, simplify, validate, split, parse, aggregate, weekly, excel\n")
 		os.Exit(1)
@@ -584,6 +585,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 
 	// 检查输入文件
 	if _, err := os.Stat(inputFile); err != nil {
+		logError("输入文件不存在: %s", inputFile)
 		fmt.Fprintf(os.Stderr, "错误: 输入文件不存在: %s\n", inputFile)
 		os.Exit(1)
 	}
@@ -591,6 +593,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 	// 创建临时目录
 	tempDir, err := os.MkdirTemp("", "stnet_ics_*")
 	if err != nil {
+		logError("创建临时目录失败: %v", err)
 		fmt.Fprintf(os.Stderr, "创建临时目录失败: %v\n", err)
 		os.Exit(1)
 	}
@@ -645,6 +648,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 		// 获取 API 密钥
 		apiKey, err := config.GetAPIKey(filepath.Dir(configFilePath), config.GlobalOverride.AIKey)
 		if err != nil {
+			logError("读取 API 密钥失败: %v", err)
 			fmt.Fprintf(os.Stderr, "读取 API 密钥失败: %v\n", err)
 			fmt.Println("      提示: 使用 -aikey 参数指定密钥，或创建 config/api.key 文件")
 			os.Exit(1)
@@ -661,6 +665,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 		promptFilePath := config.GetPromptFilePath(filepath.Dir(configFilePath))
 		prompt, err := os.ReadFile(promptFilePath)
 		if err != nil {
+			logError("读取 prompt 文件失败: %v", err)
 			fmt.Fprintf(os.Stderr, "读取 prompt 文件失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -681,12 +686,14 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 	// 解析学期开始日期
 	startDate, err := time.Parse("2006-01-02", cfg.Semester.StartDate)
 	if err != nil {
+		logError("解析学期开始日期失败: %v", err)
 		fmt.Fprintf(os.Stderr, "解析学期开始日期失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	// 验证开始日期是周一
 	if startDate.Weekday() != time.Monday {
+		logError("学期开始日期不是周一: %s", cfg.Semester.StartDate)
 		fmt.Fprintf(os.Stderr, "错误: 学期开始日期 %s 不是周一\n", cfg.Semester.StartDate)
 		os.Exit(1)
 	}
@@ -696,24 +703,20 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 
 	// 如果没有指定输出路径，自动生成
 	if outputFile == "" {
-		// 从输入文件名推断
-		baseName := strings.TrimSuffix(filepath.Base(inputFile), ".xls")
-		parts := strings.Split(baseName, "_")
-		if len(parts) >= 3 {
-			outputFile = fmt.Sprintf("%s_%s_%s_ics.ics", parts[0], parts[1], parts[2])
-		} else {
-			outputFile = baseName + "_ics.ics"
-		}
+		// 从 split 结果中提取的信息生成文件名
+		outputFile = fmt.Sprintf("%s_%s_%s_ics.ics", result.Name, result.StudentID, result.SemesterCode)
 	}
 
 	// 生成 ICS
 	generator := ics.NewGenerator(startDate, periodTimes, 15)
 	if err := generator.AddFromCSV(courseCSVFile); err != nil {
+		logError("添加课程到 ICS 失败 [%s]: %v", courseCSVFile, err)
 		fmt.Fprintf(os.Stderr, "添加课程到 ICS 失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := generator.Save(outputFile); err != nil {
+		logError("保存 ICS 文件失败 [%s]: %v", outputFile, err)
 		fmt.Fprintf(os.Stderr, "保存 ICS 文件失败: %v\n", err)
 		os.Exit(1)
 	}
