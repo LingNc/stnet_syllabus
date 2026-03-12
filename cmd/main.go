@@ -602,6 +602,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 	simplifiedFile := filepath.Join(tempDir, baseName+".html")
 	simplifier := simplify.NewSimplifier("", "", logError)
 	if err := simplifier.SimplifyFile(inputFile, simplifiedFile); err != nil {
+		logError("HTML 简化失败 [%s]: %v", inputFile, err)
 		fmt.Fprintf(os.Stderr, "HTML 简化失败: %v\n", err)
 		os.Exit(1)
 	}
@@ -609,8 +610,9 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 	// 步骤2: 拆分课程/环节
 	fmt.Println("[2/4] 拆分课程和环节...")
 	splitter := split.NewSplitter(tempDir, tempDir, tempDir, cfg.Semester.Code)
-	result := splitter.SplitFile(simplifiedFile)
+	result := splitter.SplitFileWithOptions(simplifiedFile, true) // 使用宽松模式
 	if result.Error != "" {
+		logError("数据拆分失败 [%s]: %s", inputFile, result.Error)
 		fmt.Fprintf(os.Stderr, "数据拆分失败: %s\n", result.Error)
 		os.Exit(1)
 	}
@@ -625,6 +627,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 		parser := parser.NewListParser(tempDir, tempDir)
 		parseResult := parser.ParseFile(result.CourseFile)
 		if parseResult.Error != "" {
+			logError("列表解析失败 [%s]: %s", result.CourseFile, parseResult.Error)
 			fmt.Fprintf(os.Stderr, "列表解析失败: %s\n", parseResult.Error)
 			os.Exit(1)
 		}
@@ -665,6 +668,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 		aiParser := parser.NewAI2DParser(tempDir, tempDir, promptFilePath, client, 1)
 		aiResult := aiParser.ParseFile(result.CourseFile, string(prompt))
 		if !aiResult.Success {
+			logError("AI 解析失败 [%s]: %s", result.CourseFile, aiResult.Error)
 			fmt.Fprintf(os.Stderr, "AI 解析失败: %s\n", aiResult.Error)
 			os.Exit(1)
 		}

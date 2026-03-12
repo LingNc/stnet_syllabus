@@ -84,6 +84,11 @@ func (s *Splitter) Process() ([]SplitResult, error) {
 
 // SplitFile 拆分单个文件
 func (s *Splitter) SplitFile(filePath string) SplitResult {
+	return s.SplitFileWithOptions(filePath, false)
+}
+
+// SplitFileWithOptions 拆分单个文件（支持选项）
+func (s *Splitter) SplitFileWithOptions(filePath string, relaxed bool) SplitResult {
 	result := SplitResult{
 		FilePath: filePath,
 		Success:  false,
@@ -93,8 +98,16 @@ func (s *Splitter) SplitFile(filePath string) SplitResult {
 	fileName := filepath.Base(filePath)
 	name, studentID, semesterCode, err := s.parseFileName(fileName)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		if relaxed {
+			// 宽松模式：使用默认值
+			baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+			name = baseName
+			studentID = "unknown"
+			semesterCode = "unknown"
+		} else {
+			result.Error = err.Error()
+			return result
+		}
 	}
 	result.Name = name
 	result.StudentID = studentID
