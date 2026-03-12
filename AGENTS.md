@@ -397,6 +397,13 @@ stnet_syllabus/
   - 删除 `-ics-dir` 参数
   - 代码位置：`cmd/main.go`
 
+### 2026-03-12 (feat - 个人ICS模式提取姓名学号)
+- **个人 ICS 模式支持从 HTML 提取信息**:
+  - 新增 `extractStudentInfo()` 函数，从简化后的 HTML 提取姓名和学号
+  - 在 `SplitFileWithOptions()` 宽松模式下自动提取信息
+  - 生成正确的 ICS 文件名格式 `<姓名>_<学号>_<学期代码>_ics.ics`
+  - 代码位置：`internal/split/split.go`
+
 ### 开发进度更新
 - [x] 任务1: CLI 参数覆盖与优先级
 - [x] 任务2: `-init` 零配置启动
