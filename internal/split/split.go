@@ -96,11 +96,11 @@ func (s *Splitter) SplitFileWithOptions(filePath string, relaxed bool) SplitResu
 
 	// 解析文件名
 	fileName := filepath.Base(filePath)
+	baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	name, studentID, semesterCode, err := s.parseFileName(fileName)
 	if err != nil {
 		if relaxed {
 			// 宽松模式：使用默认值
-			baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 			name = baseName
 			studentID = "unknown"
 			semesterCode = "unknown"
@@ -129,6 +129,19 @@ func (s *Splitter) SplitFileWithOptions(filePath string, relaxed bool) SplitResu
 			semesterCode = "unknown"
 		}
 		result.SemesterCode = semesterCode
+	}
+
+	// 宽松模式下，如果姓名或学号是默认值，尝试从 HTML 中提取
+	if relaxed && (name == baseName || studentID == "unknown") {
+		extractedName, extractedID := extractStudentInfo(htmlContent)
+		if extractedName != "" {
+			name = extractedName
+		}
+		if extractedID != "" {
+			studentID = extractedID
+		}
+		result.Name = name
+		result.StudentID = studentID
 	}
 
 	// 检测格式
@@ -241,6 +254,25 @@ func extractSemesterCode(htmlContent string) string {
 	}
 
 	return ""
+}
+
+// extractStudentInfo 从 HTML 中提取学生姓名和学号
+func extractStudentInfo(htmlContent string) (name, studentID string) {
+	// 尝试提取学号（12位数字）
+	re := regexp.MustCompile(`学号[：:]\s*(\d{12})`)
+	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		studentID = matches[1]
+	}
+
+	// 尝试提取姓名
+	re = regexp.MustCompile(`姓名[：:]\s*([^\s<]+)`)
+	matches = re.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		name = matches[1]
+	}
+
+	return name, studentID
 }
 
 // splitList 拆分列表格式
