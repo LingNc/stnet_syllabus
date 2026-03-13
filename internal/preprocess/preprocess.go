@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/xuri/excelize/v2"
+	"stnet_syllabus/internal/simplify"
 )
 
 // MappingEntry 映射表条目
@@ -396,5 +397,80 @@ func (p *Processor) Process() error {
 		}
 	}
 
+	return nil
+}
+
+// ProcessDirectXLS 直接处理 input 目录中的 xls 文件（无 zip/映射表模式）
+// 从 xls 文件中提取学生信息并重命名
+func (p *Processor) ProcessDirectXLS() error {
+	// 确保输出目录存在
+	if err := os.MkdirAll(p.OutputDir, 0755); err != nil {
+		return fmt.Errorf("创建输出目录失败: %w", err)
+	}
+
+	// 读取 input 目录
+	entries, err := os.ReadDir(p.InputDir)
+	if err != nil {
+		return fmt.Errorf("读取输入目录失败: %w", err)
+	}
+
+	var xlsFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lowerName := strings.ToLower(entry.Name())
+		if strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
+			xlsFiles = append(xlsFiles, filepath.Join(p.InputDir, entry.Name()))
+		}
+	}
+
+	if len(xlsFiles) == 0 {
+		return fmt.Errorf("未找到 xls 文件")
+	}
+
+	fmt.Printf("发现 %d 个 xls 文件，开始直接处理...\n\n", len(xlsFiles))
+
+	processed := 0
+	skipped := 0
+
+	for _, xlsPath := range xlsFiles {
+		fileName := filepath.Base(xlsPath)
+		fmt.Printf("处理: %s\n", fileName)
+
+		// 从文件中提取学生信息
+		info, err := simplify.ExtractStudentInfoFromFile(xlsPath)
+		if err != nil {
+			fmt.Printf("  错误: 提取学生信息失败: %v，跳过\n", err)
+			skipped++
+			continue
+		}
+
+		// 构建新文件名
+		newFileName := fmt.Sprintf("%s_%s_%s.xls", info.Name, info.StudentID, info.SemesterCode)
+		outputPath := filepath.Join(p.OutputDir, newFileName)
+
+		// 复制文件
+		content, err := os.ReadFile(xlsPath)
+		if err != nil {
+			fmt.Printf("  错误: 读取文件失败: %v，跳过\n", err)
+			skipped++
+			continue
+		}
+
+		if err := os.WriteFile(outputPath, content, 0644); err != nil {
+			fmt.Printf("  错误: 写入文件失败: %v，跳过\n", err)
+			skipped++
+			continue
+		}
+
+		fmt.Printf("  成功: %s -> %s\n", fileName, newFileName)
+		if info.SemesterCode == "" {
+			fmt.Printf("  警告: 未能提取学期代码，请检查配置文件\n")
+		}
+		processed++
+	}
+
+	fmt.Printf("\n直接处理完成: 成功 %d, 跳过 %d\n", processed, skipped)
 	return nil
 }

@@ -26,9 +26,10 @@ api.key
 !agent-refer
 !build.sh
 
-# 基本文件夹
+# 基本文件/夹
 !*code-workspace
 !.gitignore
+!LICENSE
 !README.md
 !AGENTS.md
 !PLAN.md
