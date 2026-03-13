@@ -23,6 +23,7 @@ api.key
 
 # 工具
 !.agents
+!agent-refer
 !build.sh
 
 # 基本文件夹
