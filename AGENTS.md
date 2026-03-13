@@ -71,28 +71,70 @@ mkdir -p input/
 
 ---
 
+## 可用技能
+
+### analysis-report
+**路径**: `.agents/skills/analysis-report/SKILL.md`
+
+**用途**: 根据计划要求分析项目执行成果，检查输出一致性，验证数据完整性，并生成全面的ANALYSIS_REPORT.md。
+
+**适用场景**:
+- 验证项目输出是否符合预期
+- 排查不一致问题
+- 对照需求核实完整性
+- 审核执行结果
+
+**使用方法**:
+1. 确保已运行项目生成输出
+2. 使用 `/analysis-report` 或调用analysis-report技能
+3. 指定要比对的Plan文件（如 `plan/PLAN_0.md`）
+4. 技能会自动检查输出文件、日志，生成分析报告
+
+---
+
 ## 目录结构
 
 ```
 stnet_syllabus/
-├── cmd/              # 主程序入口
-├── internal/         # 核心模块
-│   ├── preprocess/   # 数据预处理
-│   ├── simplify/     # HTML 精简
-│   ├── validate/     # 数据验证
-│   ├── split/        # 格式拆分
-│   ├── parser/       # CSV 解析
-│   ├── aggregate/    # 无课表聚合
-│   ├── weekly/       # 周次切片
-│   ├── excel/        # Excel 生成
-│   └── ics/          # ICS 日历生成
-├── config/           # 运行时配置 (-init生成)
-├── input/            # 输入数据
-├── output/           # 输出数据
-│   ├── ics/          # ICS 日历文件
+├── cmd/                 # 命令入口
+│   ├── main.go          # 主程序
+│   ├── embed.go         # 配置嵌入与初始化
+│   └── config/          # 嵌入的默认配置（go:embed）
+│       ├── config.yaml  # 全局配置模板
+│       ├── api.key      # API 密钥模板（示例）
+│       ├── 二维表.prompt # AI 提示词模板
+│       └── README.md    # 配置说明
+├── input/               # 输入数据（运行时创建）
+├── output/              # 输出数据（运行时创建）
+│   ├── ics/             # ICS 日历文件
+│   ├── temp/            # 临时文件
+│   │   ├── raw_xls/     # 重命名后的原始文件
+│   │   ├── simplified_xls/  # 精简后的 HTML
+│   │   └── split/       # 拆分后的文件
+│   │       ├── 2d_table/
+│   │       └── list/
 │   ├── csv_normalized/  # 标准化 CSV
-│   └── final/        # Excel 报表
-└── agent-refer/      # 详细参考文档
+│   ├── final/           # 最终 Excel 报表
+│   └── error.log        # 错误日志
+├── config/              # 运行时配置（-init生成，gitignore）
+│   ├── config.yaml      # 用户自定义配置
+│   ├── api.key          # 用户API密钥
+│   ├── 二维表.prompt     # AI提示词（可自定义）
+│   └── README.md        # 配置说明
+├── internal/            # 内部包
+│   ├── preprocess/      # 数据预处理
+│   ├── simplify/        # HTML 精简
+│   ├── validate/        # 数据验证
+│   ├── split/           # 数据拆分
+│   ├── parser/          # 解析器（含 AI 调用）
+│   ├── aggregate/       # 无课表聚合
+│   ├── weekly/          # 周次切片
+│   ├── excel/           # Excel 生成
+│   └── ics/             # ICS 日历生成
+├── pkg/                 # 公共包
+│   ├── models/          # 数据模型
+│   └── utils/           # 工具函数
+└── agent-refer/         # 详细参考文档
     ├── 01-详细流程.md
     ├── 02-变更日志.md
     ├── 03-开发进度.md
