@@ -155,6 +155,8 @@ stnet_syllabus/
 **完整进度**: 见 `agent-refer/03-开发进度.md`
 
 ### 最新变更
+- 修复 2D 表环节数据提取失败问题
+- 环节事件在周一到周五每天都生成
 - 修复 ICS 时区定义 (VTIMEZONE)
 - 修复 ICS 格式兼容性 (DURATION替代DTEND)
 - 修复列表格式环节数据导入
