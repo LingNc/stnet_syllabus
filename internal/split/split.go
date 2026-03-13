@@ -84,6 +84,11 @@ func (s *Splitter) Process() ([]SplitResult, error) {
 
 // SplitFile 拆分单个文件
 func (s *Splitter) SplitFile(filePath string) SplitResult {
+	return s.SplitFileWithOptions(filePath, false)
+}
+
+// SplitFileWithOptions 拆分单个文件（支持选项）
+func (s *Splitter) SplitFileWithOptions(filePath string, relaxed bool) SplitResult {
 	result := SplitResult{
 		FilePath: filePath,
 		Success:  false,
@@ -91,10 +96,18 @@ func (s *Splitter) SplitFile(filePath string) SplitResult {
 
 	// 解析文件名
 	fileName := filepath.Base(filePath)
+	baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	name, studentID, semesterCode, err := s.parseFileName(fileName)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		if relaxed {
+			// 宽松模式：使用默认值
+			name = baseName
+			studentID = "unknown"
+			semesterCode = "unknown"
+		} else {
+			result.Error = err.Error()
+			return result
+		}
 	}
 	result.Name = name
 	result.StudentID = studentID
@@ -116,6 +129,19 @@ func (s *Splitter) SplitFile(filePath string) SplitResult {
 			semesterCode = "unknown"
 		}
 		result.SemesterCode = semesterCode
+	}
+
+	// 宽松模式下，如果姓名或学号是默认值，尝试从 HTML 中提取
+	if relaxed && (name == baseName || studentID == "unknown") {
+		extractedName, extractedID := extractStudentInfo(htmlContent)
+		if extractedName != "" {
+			name = extractedName
+		}
+		if extractedID != "" {
+			studentID = extractedID
+		}
+		result.Name = name
+		result.StudentID = studentID
 	}
 
 	// 检测格式
@@ -165,14 +191,28 @@ func (s *Splitter) parseFileName(fileName string) (name, studentID, semesterCode
 
 // detectFormat 检测格式
 func detectFormat(htmlContent string) string {
+	// 优先检查明确的 TYPE 标记（简化后的文件）
+	if strings.Contains(htmlContent, "<!-- TYPE: 2D_TABLE -->") {
+		return "2d"
+	}
+	if strings.Contains(htmlContent, "<!-- TYPE: COURSE -->") ||
+		strings.Contains(htmlContent, "<!-- TYPE: ACTIVITY -->") {
+		return "list"
+	}
+	// 检查原始标记（未简化的文件）
 	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
 		strings.Contains(htmlContent, "上课班级代码") {
 		return "list"
 	}
+	// 检查简化后的其他标记
+	if strings.Contains(htmlContent, "<!-- SEMESTER:") {
+		// 有 SEMESTER 注释但没有 TYPE 标记，可能是 list 格式
+		return "list"
+	}
+	// 检查 2D 表原始标记
 	if strings.Contains(htmlContent, `id='mytable'`) ||
 		strings.Contains(htmlContent, `id="mytable"`) ||
-		strings.Contains(htmlContent, "div_nokb") ||
-		strings.Contains(htmlContent, "TYPE: 2D_TABLE") {
+		strings.Contains(htmlContent, "div_nokb") {
 		return "2d"
 	}
 	return "unknown"
@@ -214,6 +254,25 @@ func extractSemesterCode(htmlContent string) string {
 	}
 
 	return ""
+}
+
+// extractStudentInfo 从 HTML 中提取学生姓名和学号
+func extractStudentInfo(htmlContent string) (name, studentID string) {
+	// 尝试提取学号（12位数字）
+	re := regexp.MustCompile(`学号[：:]\s*(\d{12})`)
+	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		studentID = matches[1]
+	}
+
+	// 尝试提取姓名
+	re = regexp.MustCompile(`姓名[：:]\s*([^\s<]+)`)
+	matches = re.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		name = matches[1]
+	}
+
+	return name, studentID
 }
 
 // splitList 拆分列表格式

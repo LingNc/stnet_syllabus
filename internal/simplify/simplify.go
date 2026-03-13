@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -45,10 +46,20 @@ func (s *Simplifier) SimplifyFile(inputPath, outputPath string) error {
 	}
 
 	// 尝试将 GBK 转换为 UTF-8
-	htmlContent, err := decodeGBK(content)
-	if err != nil {
-		// 如果转换失败，尝试直接使用原内容
+	// 首先检测是否已经是 UTF-8
+	var htmlContent string
+	if isValidUTF8(content) {
+		// 已经是 UTF-8，直接使用
 		htmlContent = string(content)
+	} else {
+		// 尝试 GBK 解码
+		decoded, err := decodeGBK(content)
+		if err != nil {
+			// 解码失败，尝试直接使用原内容
+			htmlContent = string(content)
+		} else {
+			htmlContent = decoded
+		}
 	}
 
 	// 检查是否是有效的HTML格式
@@ -282,6 +293,20 @@ func simplify2DHTML(htmlContent string) string {
 	})
 
 	result.WriteString("</table>\n")
+
+	// 提取环节信息（从底部注释）
+	// 环节数据通常在课表后面的 div 中，格式为：注1、[编号]环节名称 第X-X周 指导老师
+	doc.Find("div").Each(func(i int, div *goquery.Selection) {
+		text := strings.TrimSpace(div.Text())
+		// 检查是否包含环节注释标记
+		if strings.Contains(text, "注1") || strings.Contains(text, "注2") || strings.Contains(text, "注：") {
+			cleanText := cleanWhitespace(text)
+			if cleanText != "" {
+				result.WriteString(fmt.Sprintf("<!-- ACTIVITIES: %s -->\n", cleanText))
+			}
+		}
+	})
+
 	result.WriteString("</body>\n</html>")
 	return result.String()
 }
@@ -345,6 +370,12 @@ func decodeGBK(data []byte) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+// isValidUTF8 检测内容是否是有效的 UTF-8 编码
+// 使用标准库的 utf8.Valid 进行严格检测
+func isValidUTF8(data []byte) bool {
+	return utf8.Valid(data)
 }
 
 // isBinaryContent 检测内容是否是二进制格式（如xlsx）

@@ -224,6 +224,41 @@ func simplify2DForAI(htmlContent string) string {
 		result.WriteString("</tr>\n")
 	})
 
+	// 提取环节信息
+	// 优先从 <!-- ACTIVITIES: ... --> 注释中提取（简化后的格式）
+	activityCommentRe := regexp.MustCompile(`<!-- ACTIVITIES:\s*(.+?)\s*-->`)
+	matches := activityCommentRe.FindStringSubmatch(htmlContent)
+	if len(matches) >= 2 {
+		// 从注释中提取环节数据
+		activityText := matches[1]
+		// 分割多个环节（注1、注2...）
+		activityRe := regexp.MustCompile(`注\d+、[^注]+`)
+		activities := activityRe.FindAllString(activityText, -1)
+		for _, activity := range activities {
+			activity = strings.TrimSpace(activity)
+			if activity != "" {
+				result.WriteString(fmt.Sprintf("<div class=\"activity\">%s</div>\n", activity))
+			}
+		}
+	} else {
+		// 从原始 HTML 的 div 中提取（未简化格式）
+		// 环节数据通常在课表后面的 div 中，格式为：注1、[编号]环节名称 第X-X周 指导老师
+		doc.Find("div").Each(func(i int, div *goquery.Selection) {
+			text := strings.TrimSpace(div.Text())
+			// 检查是否包含环节注释标记
+			if strings.Contains(text, "注1") || strings.Contains(text, "注2") || strings.Contains(text, "注：") {
+				// 清理并输出环节信息
+				lines := strings.Split(text, "\n")
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line != "" && (strings.HasPrefix(line, "注") || strings.Contains(line, "课程设计") || strings.Contains(line, "实习")) {
+						result.WriteString(fmt.Sprintf("<div class=\"activity\">%s</div>\n", line))
+					}
+				}
+			}
+		})
+	}
+
 	result.WriteString("</body>\n</html>")
 	return result.String()
 }
