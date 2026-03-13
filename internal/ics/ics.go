@@ -88,7 +88,7 @@ func (g *Generator) AddFromCSV(csvFile string) error {
 // parseCourseRow 解析课程行
 func (g *Generator) parseCourseRow(record []string, colMap map[string]int) error {
 	courseCol := colMap["课程"]
-	teacherCol := colMap["任课老师"]
+	teacherCol := colMap["教师"]
 	weekCol := colMap["周次"]
 	sessionCol := colMap["节次"]
 	locationCol := colMap["地点"]
@@ -211,16 +211,6 @@ func (g *Generator) Save(outputPath string) error {
 	builder.WriteString("METHOD:PUBLISH\r\n")
 	builder.WriteString("X-WR-TIMEZONE:Asia/Shanghai\r\n")
 
-	// 写入时区定义
-	builder.WriteString("BEGIN:VTIMEZONE\r\n")
-	builder.WriteString("TZID:Asia/Shanghai\r\n")
-	builder.WriteString("BEGIN:STANDARD\r\n")
-	builder.WriteString("DTSTART:19700101T000000\r\n")
-	builder.WriteString("TZOFFSETFROM:+0800\r\n")
-	builder.WriteString("TZOFFSETTO:+0800\r\n")
-	builder.WriteString("END:STANDARD\r\n")
-	builder.WriteString("END:VTIMEZONE\r\n")
-
 	// 写入所有事件
 	for _, event := range g.Events {
 		g.writeEvent(&builder, event)
@@ -257,7 +247,7 @@ func (g *Generator) writeEvent(builder *strings.Builder, event Event) {
 	now := time.Now().UTC().Format("20060102T150405Z")
 	builder.WriteString(fmt.Sprintf("DTSTAMP:%s\r\n", now))
 
-	// 开始时间（本地时间格式）
+	// 开始时间（带时区引用）
 	startStr := event.StartTime.Format("20060102T150405")
 	builder.WriteString(fmt.Sprintf("DTSTART;TZID=Asia/Shanghai:%s\r\n", startStr))
 
