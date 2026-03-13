@@ -199,7 +199,7 @@ stnet_syllabus/
 - 每次会话开始前，AI 工具应优先读取 AGENTS.md 了解项目状态
 - 每次重要变更后，AI 应更新 `agent-refer/` 下的对应文档
 - 保持 AGENTS.md 与 PLAN.md 的描述一致性
-- **Git 操作规范**：根据 `RULE.md` 执行 git 操作
+- **Git 操作规范**：根据 `RULE.md` 执行 git 操作（详细请参考`RULE.md`）
   - 完成一次任务后进行 git 提交
   - **不要添加署名**（不要包含 `Co-Authored-By` 或类似标记）
   - 当前分支是特性/修复分支时，直接提交到当前分支
