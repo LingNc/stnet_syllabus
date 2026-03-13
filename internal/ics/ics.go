@@ -211,6 +211,16 @@ func (g *Generator) Save(outputPath string) error {
 	builder.WriteString("METHOD:PUBLISH\r\n")
 	builder.WriteString("X-WR-TIMEZONE:Asia/Shanghai\r\n")
 
+	// 写入时区定义（标准 VTIMEZONE）
+	builder.WriteString("BEGIN:VTIMEZONE\r\n")
+	builder.WriteString("TZID:Asia/Shanghai\r\n")
+	builder.WriteString("BEGIN:STANDARD\r\n")
+	builder.WriteString("DTSTART:19700101T000000\r\n")
+	builder.WriteString("TZOFFSETFROM:+0800\r\n")
+	builder.WriteString("TZOFFSETTO:+0800\r\n")
+	builder.WriteString("END:STANDARD\r\n")
+	builder.WriteString("END:VTIMEZONE\r\n")
+
 	// 写入所有事件
 	for _, event := range g.Events {
 		g.writeEvent(&builder, event)
@@ -243,9 +253,9 @@ func (g *Generator) writeEvent(builder *strings.Builder, event Event) {
 	// UID
 	builder.WriteString(fmt.Sprintf("UID:%s\r\n", event.UID))
 
-	// 时间戳（创建时间）
-	now := time.Now().UTC().Format("20060102T150405Z")
-	builder.WriteString(fmt.Sprintf("DTSTAMP:%s\r\n", now))
+	// 时间戳（使用事件开始时间作为 DTSTAMP）
+	dtstamp := event.StartTime.UTC().Format("20060102T150405Z")
+	builder.WriteString(fmt.Sprintf("DTSTAMP:%s\r\n", dtstamp))
 
 	// 开始时间（带时区引用）
 	startStr := event.StartTime.Format("20060102T150405")
