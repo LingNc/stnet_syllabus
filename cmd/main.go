@@ -631,6 +631,16 @@ func runICSExport(cfg *config.Config, icsFilePath string) {
 			continue
 		}
 
+		// 查找并添加环节数据（对应的 _activity.csv 文件）
+		courseCount := len(generator.Events)
+		activityFile := getCorrespondingActivityFile(csvFile)
+		if activityFile != "" {
+			if err := generator.AddFromCSV(activityFile); err != nil {
+				fmt.Fprintf(os.Stderr, "  警告: 添加环节失败 %s: %v\n", filepath.Base(activityFile), err)
+				logError("ICS 添加环节失败 [%s]: %v", activityFile, err)
+			}
+		}
+
 		// 生成文件名
 		baseName := strings.TrimSuffix(filepath.Base(csvFile), ".csv")
 		parts := strings.Split(baseName, "_")
@@ -648,7 +658,8 @@ func runICSExport(cfg *config.Config, icsFilePath string) {
 			continue
 		}
 
-		fmt.Printf("✓ 已生成: %s (%d 个事件)\n", icsFileName, len(generator.Events))
+		activityCount := len(generator.Events) - courseCount
+		fmt.Printf("✓ 已生成: %s (%d 个事件: 课程 %d, 环节 %d)\n", icsFileName, len(generator.Events), courseCount, activityCount)
 	}
 
 	fmt.Printf("\n✓ ICS 批量导出完成，输出目录: %s\n", outputDir)
@@ -874,6 +885,31 @@ func findCSVCourseFiles(dir string) []string {
 	}
 
 	return files
+}
+
+// getCorrespondingActivityFile 获取与课程 CSV 对应的环节 CSV 文件路径
+// 课程文件: 姓名_学号_学期_course.csv
+// 环节文件: 姓名_学号_学期_activity.csv
+func getCorrespondingActivityFile(courseCSV string) string {
+	dir := filepath.Dir(courseCSV)
+	baseName := strings.TrimSuffix(filepath.Base(courseCSV), ".csv")
+
+	// 将 _course 替换为 _activity
+	activityBaseName := strings.Replace(baseName, "_course", "_activity", 1)
+
+	// 如果文件名中没有 _course，则直接返回空
+	if activityBaseName == baseName {
+		return ""
+	}
+
+	activityFile := filepath.Join(dir, activityBaseName+".csv")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(activityFile); err == nil {
+		return activityFile
+	}
+
+	return ""
 }
 
 // parseCSVFileName 从 CSV 文件名解析信息
