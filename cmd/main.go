@@ -189,7 +189,7 @@ func runAll(cfg *config.Config, skipAI bool) {
 	// 检测是否为直接处理模式（无 zip，仅有 xls）
 	directMode := isDirectMode(cfg.Paths.Input)
 	if directMode {
-		fmt.Println("【直接处理模式】检测到 xls 文件，将跳过数据验证步骤\n")
+		fmt.Println("检测到 xls 文件，将跳过数据验证步骤\n")
 	}
 
 	steps := []struct {
