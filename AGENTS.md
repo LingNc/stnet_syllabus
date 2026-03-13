@@ -192,7 +192,5 @@ stnet_syllabus/
 - 每次重要变更后，AI 应更新 `agent-refer/` 下的对应文档
 - 保持 AGENTS.md 与 PLAN.md 的描述一致性
 - **Git 操作规范**：根据 `RULE.md` 执行 git 操作
-  - 修复 Bug 或完成新功能后，自动执行 `git add` 和 `git commit`
-  - 提交信息使用 `fix:`、`feat:`、`refactor:`、`docs:` 等前缀（见 RULE.md 第2条）
   - **不要添加署名**（不要包含 `Co-Authored-By` 或类似标记）
   - 当前分支是特性/修复分支时，直接提交到当前分支
