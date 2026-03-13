@@ -186,20 +186,38 @@ func main() {
 func runAll(cfg *config.Config, skipAI bool) {
 	fmt.Println("=== 开始完整处理流程 ===\n")
 
+	// 检测是否为直接处理模式（无 zip，仅有 xls）
+	directMode := isDirectMode(cfg.Paths.Input)
+	if directMode {
+		fmt.Println("【直接处理模式】检测到 xls 文件，将跳过数据验证步骤\n")
+	}
+
 	steps := []struct {
 		name string
 		fn   func()
 	}{
 		{"Step 1: 数据预处理", func() { runPreprocess(cfg) }},
 		{"Step 2: HTML 精简", func() { runSimplify(cfg) }},
-		{"Step 3: 数据验证", func() { runValidate(cfg) }},
-		{"Step 4: 数据拆分", func() { runSplit(cfg) }},
-		{"Step 5: 课表解析", func() { runParse(cfg, skipAI) }},
-		{"Step 6: 空闲时间聚合", func() { runAggregate(cfg) }},
-		{"Step 7: 周次切片", func() { runWeekly(cfg) }},
-		{"Step 8: Excel 生成", func() { runExcel(cfg) }},
 	}
 
+	// 标准模式下添加验证步骤
+	if !directMode {
+		steps = append(steps, struct {
+			name string
+			fn   func()
+		}{"Step 3: 数据验证", func() { runValidate(cfg) }})
+	}
+
+	// 继续添加后续步骤
+	steps = append(steps,
+		struct{ name string; fn func() }{"Step 4: 数据拆分", func() { runSplit(cfg) }},
+		struct{ name string; fn func() }{"Step 5: 课表解析", func() { runParse(cfg, skipAI) }},
+		struct{ name string; fn func() }{"Step 6: 空闲时间聚合", func() { runAggregate(cfg) }},
+		struct{ name string; fn func() }{"Step 7: 周次切片", func() { runWeekly(cfg) }},
+		struct{ name string; fn func() }{"Step 8: Excel 生成", func() { runExcel(cfg) }},
+	)
+
+	// 重新编号步骤
 	for i, s := range steps {
 		fmt.Printf("\n[%d/%d] %s\n", i+1, len(steps), s.name)
 		fmt.Println(strings.Repeat("-", 40))
@@ -209,10 +227,37 @@ func runAll(cfg *config.Config, skipAI bool) {
 	fmt.Println("\n=== 所有步骤完成 ===")
 }
 
+// isDirectMode 检测是否为直接处理模式
+func isDirectMode(inputDir string) bool {
+	entries, err := os.ReadDir(inputDir)
+	if err != nil {
+		return false
+	}
+
+	hasZip := false
+	hasXLS := false
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lowerName := strings.ToLower(entry.Name())
+		if strings.HasSuffix(lowerName, ".zip") {
+			hasZip = true
+		} else if strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
+			hasXLS = true
+		}
+	}
+
+	// 没有 zip 但有 xls 文件，视为直接模式
+	return !hasZip && hasXLS
+}
+
 // runPreprocess 执行数据预处理
+// 支持两种模式：
+// 1. 标准模式（zip + xlsx 映射表）：解压 zip 并根据映射表重命名
+// 2. 直接模式（仅 xls）：直接从 xls 提取学生信息并重命名
 func runPreprocess(cfg *config.Config) {
-	// 查找映射表文件
-	mappingFile := ""
 	entries, err := os.ReadDir(cfg.Paths.Input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "读取输入目录失败: %v\n", err)
@@ -220,28 +265,57 @@ func runPreprocess(cfg *config.Config) {
 		return
 	}
 
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".xlsx") {
-			mappingFile = filepath.Join(cfg.Paths.Input, entry.Name())
-			break
-		}
-	}
+	// 检测 input 目录内容
+	hasZip := false
+	hasXLS := false
+	hasXLSX := false
 
-	if mappingFile == "" {
-		fmt.Println("警告: 未找到映射表文件，跳过预处理")
-		logError("未找到映射表文件，跳过预处理")
-		return
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lowerName := strings.ToLower(entry.Name())
+		if strings.HasSuffix(lowerName, ".zip") {
+			hasZip = true
+		} else if strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
+			hasXLS = true
+		} else if strings.HasSuffix(lowerName, ".xlsx") {
+			hasXLSX = true
+		}
 	}
 
 	processor := preprocess.NewProcessor(
 		cfg.Paths.Input,
 		cfg.Paths.TempRaw,
-		mappingFile,
+		"", // MappingFile 会在 Process 中自动查找
 	)
 
-	if err := processor.Process(); err != nil {
-		fmt.Fprintf(os.Stderr, "预处理失败: %v\n", err)
-		logError("预处理失败: %v", err)
+	if hasZip {
+		// 标准模式：需要 zip + xlsx 映射表
+		fmt.Println("检测到 zip 文件，使用标准预处理模式...")
+
+		if !hasXLSX {
+			fmt.Println("错误: 未找到映射表文件(.xlsx)，标准模式需要映射表")
+			logError("未找到映射表文件")
+			return
+		}
+
+		if err := processor.Process(); err != nil {
+			fmt.Fprintf(os.Stderr, "预处理失败: %v\n", err)
+			logError("预处理失败: %v", err)
+		}
+	} else if hasXLS {
+		// 直接模式：仅 xls 文件
+		fmt.Println("检测到 xls 文件，使用直接处理模式（从文件提取学生信息）...")
+		fmt.Println("提示: 直接模式将跳过数据校验步骤")
+
+		if err := processor.ProcessDirectXLS(); err != nil {
+			fmt.Fprintf(os.Stderr, "直接处理失败: %v\n", err)
+			logError("直接处理失败: %v", err)
+		}
+	} else {
+		fmt.Println("警告: 未找到 zip 或 xls 文件，跳过预处理")
+		logError("未找到可处理的文件")
 	}
 }
 
