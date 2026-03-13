@@ -263,24 +263,29 @@ func (g *Generator) parseActivityRow(record []string, colMap map[string]int) err
 	// 解析周次范围
 	weeks := parseWeekRanges(weekStr)
 	for _, week := range weeks {
-		// 计算日期（环节通常是一整周，标记为全天事件）
+		// 计算该周的起始日期（周一）
 		daysToAdd := (week - 1) * 7
-		eventDate := g.StartDate.AddDate(0, 0, daysToAdd)
+		weekStart := g.StartDate.AddDate(0, 0, daysToAdd)
 
-		// 创建全天事件（使用DATE值类型）
-		event := Event{
-			UID:         generateUID(),
-			Name:        activityName + " (环节)",
-			Teacher:     teacher,
-			Location:    "",
-			StartTime:   eventDate,
-			EndTime:     eventDate.AddDate(0, 0, 1), // 全天事件结束于第二天
-			Description: teacher,
-			RRULE:       "", // 环节不重复，每周单独一个事件
-			Duration:    0,
+		// 为周一到周五每天创建一个事件
+		for dayOffset := 0; dayOffset < 5; dayOffset++ {
+			eventDate := weekStart.AddDate(0, 0, dayOffset)
+
+			// 创建全天事件（使用DATE值类型）
+			event := Event{
+				UID:         generateUID(),
+				Name:        activityName + " (环节)",
+				Teacher:     teacher,
+				Location:    "",
+				StartTime:   eventDate,
+				EndTime:     eventDate.AddDate(0, 0, 1), // 全天事件结束于第二天
+				Description: teacher,
+				RRULE:       "", // 环节不重复，每天单独一个事件
+				Duration:    0,
+			}
+
+			g.Events = append(g.Events, event)
 		}
-
-		g.Events = append(g.Events, event)
 	}
 
 	return nil
