@@ -74,11 +74,22 @@ func (g *Generator) AddFromCSV(csvFile string) error {
 		colMap[strings.TrimSpace(h)] = i
 	}
 
+	// 判断是课程数据还是环节数据
+	hasCourseCol := colMap["课程"] > 0 || strings.Contains(headers[0], "课程")
+	hasActivityCol := colMap["环节"] > 0 || (len(headers) > 0 && strings.Contains(headers[0], "环节"))
+
 	// 解析每一行
 	for _, record := range records[1:] {
-		if err := g.parseCourseRow(record, colMap); err != nil {
-			// 记录警告但继续处理
-			fmt.Printf("  警告: 解析行失败: %v\n", err)
+		if hasActivityCol && !hasCourseCol {
+			// 环节数据
+			if err := g.parseActivityRow(record, colMap); err != nil {
+				fmt.Printf("  警告: 解析环节行失败: %v\n", err)
+			}
+		} else {
+			// 课程数据
+			if err := g.parseCourseRow(record, colMap); err != nil {
+				fmt.Printf("  警告: 解析课程行失败: %v\n", err)
+			}
 		}
 	}
 
@@ -87,14 +98,25 @@ func (g *Generator) AddFromCSV(csvFile string) error {
 
 // parseCourseRow 解析课程行
 func (g *Generator) parseCourseRow(record []string, colMap map[string]int) error {
+	// 获取列索引（注意：map中不存在的key会返回0）
 	courseCol := colMap["课程"]
+	// 如果没有课程列，可能是环节数据，跳过
+	if courseCol == 0 && colMap["环节"] > 0 {
+		return nil // 环节数据需要单独处理，这里跳过
+	}
+
 	teacherCol := colMap["教师"]
 	weekCol := colMap["周次"]
 	sessionCol := colMap["节次"]
 	locationCol := colMap["地点"]
 
 	// 检查必要的列
-	if courseCol >= len(record) || sessionCol >= len(record) {
+	if courseCol >= len(record) || courseCol < 0 {
+		return nil
+	}
+
+	// 如果没有节次列（如环节数据），跳过
+	if sessionCol == 0 || sessionCol >= len(record) {
 		return nil
 	}
 
@@ -199,7 +221,107 @@ func (g *Generator) parseCourseRow(record []string, colMap map[string]int) error
 	return nil
 }
 
-// Save 保存 ICS 文件
+// parseActivityRow 解析环节行（生成全天事件）
+func (g *Generator) parseActivityRow(record []string, colMap map[string]int) error {
+	// 获取列索引
+	activityCol := colMap["环节"]
+	weekCol := colMap["周次"]
+	teacherCol := colMap["指导教师"]
+	if teacherCol == 0 {
+		// 尝试其他可能的列名
+		teacherCol = colMap["指导老师"]
+	}
+
+	// 检查必要的列
+	if activityCol >= len(record) || activityCol < 0 {
+		return nil
+	}
+
+	activityName := strings.TrimSpace(record[activityCol])
+	if activityName == "" {
+		return nil
+	}
+
+	// 清理环节名（去除前缀编号）
+	activityName = cleanCourseName(activityName)
+
+	var teacher string
+	if teacherCol > 0 && teacherCol < len(record) {
+		teacher = strings.TrimSpace(record[teacherCol])
+	}
+
+	weekStr := ""
+	if weekCol > 0 && weekCol < len(record) {
+		weekStr = strings.TrimSpace(record[weekCol])
+	}
+
+	// 解析周次，为每一周创建一个全天事件
+	if weekStr == "" || weekStr == "*未排课*" {
+		return nil
+	}
+
+	// 解析周次范围
+	weeks := parseWeekRanges(weekStr)
+	for _, week := range weeks {
+		// 计算日期（环节通常是一整周，标记为全天事件）
+		daysToAdd := (week - 1) * 7
+		eventDate := g.StartDate.AddDate(0, 0, daysToAdd)
+
+		// 创建全天事件（使用DATE值类型）
+		event := Event{
+			UID:         generateUID(),
+			Name:        activityName + " (环节)",
+			Teacher:     teacher,
+			Location:    "",
+			StartTime:   eventDate,
+			EndTime:     eventDate.AddDate(0, 0, 1), // 全天事件结束于第二天
+			Description: teacher,
+			RRULE:       "", // 环节不重复，每周单独一个事件
+			Duration:    0,
+		}
+
+		g.Events = append(g.Events, event)
+	}
+
+	return nil
+}
+
+// parseWeekRanges 解析周次范围，返回所有周数的列表
+func parseWeekRanges(weekStr string) []int {
+	var weeks []int
+	if weekStr == "" {
+		return weeks
+	}
+
+	// 处理逗号分隔的多个范围
+	parts := strings.Split(weekStr, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// 检查是否是范围（如 "6-7"）
+		if strings.Contains(part, "-") {
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) == 2 {
+				start, _ := strconv.Atoi(strings.TrimSpace(rangeParts[0]))
+				end, _ := strconv.Atoi(strings.TrimSpace(rangeParts[1]))
+				for i := start; i <= end; i++ {
+					weeks = append(weeks, i)
+				}
+			}
+		} else {
+			// 单个周次
+			week, _ := strconv.Atoi(part)
+			if week > 0 {
+				weeks = append(weeks, week)
+			}
+		}
+	}
+
+	return weeks
+}
 func (g *Generator) Save(outputPath string) error {
 	var builder strings.Builder
 
@@ -257,13 +379,25 @@ func (g *Generator) writeEvent(builder *strings.Builder, event Event) {
 	dtstamp := event.StartTime.UTC().Format("20060102T150405Z")
 	builder.WriteString(fmt.Sprintf("DTSTAMP:%s\r\n", dtstamp))
 
-	// 开始时间（带时区引用）
-	startStr := event.StartTime.Format("20060102T150405")
-	builder.WriteString(fmt.Sprintf("DTSTART;TZID=Asia/Shanghai:%s\r\n", startStr))
+	// 判断是否为全天事件（环节）
+	isAllDay := event.Duration == 0 && event.RRULE == ""
 
-	// 持续时间（替代 DTEND）
-	durationStr := formatDuration(event.Duration)
-	builder.WriteString(fmt.Sprintf("DURATION:%s\r\n", durationStr))
+	if isAllDay {
+		// 全天事件：使用 DATE 格式（无时间部分）
+		startStr := event.StartTime.Format("20060102")
+		builder.WriteString(fmt.Sprintf("DTSTART;VALUE=DATE:%s\r\n", startStr))
+		// 全天事件的结束日期是第二天
+		endStr := event.EndTime.Format("20060102")
+		builder.WriteString(fmt.Sprintf("DTEND;VALUE=DATE:%s\r\n", endStr))
+	} else {
+		// 普通事件：使用带时区的 DATETIME 格式
+		startStr := event.StartTime.Format("20060102T150405")
+		builder.WriteString(fmt.Sprintf("DTSTART;TZID=Asia/Shanghai:%s\r\n", startStr))
+
+		// 持续时间（替代 DTEND）
+		durationStr := formatDuration(event.Duration)
+		builder.WriteString(fmt.Sprintf("DURATION:%s\r\n", durationStr))
+	}
 
 	// 摘要（课程名）
 	summary := escapeICS(event.Name)
@@ -281,19 +415,23 @@ func (g *Generator) writeEvent(builder *strings.Builder, event Event) {
 		builder.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", desc))
 	}
 
-	// 重复规则
+	// 重复规则（全天事件不重复）
 	if event.RRULE != "" {
 		builder.WriteString(fmt.Sprintf("RRULE:%s\r\n", event.RRULE))
 	}
 
-	// 透明度
-	builder.WriteString("TRANSP:OPAQUE\r\n")
+	// 透明度（全天事件使用 TRANSPARENT）
+	if isAllDay {
+		builder.WriteString("TRANSP:TRANSPARENT\r\n")
+	} else {
+		builder.WriteString("TRANSP:OPAQUE\r\n")
+	}
 
 	// 状态
 	builder.WriteString("STATUS:CONFIRMED\r\n")
 
-	// 提醒
-	if g.AlarmTime > 0 {
+	// 提醒（全天事件不添加提醒）
+	if g.AlarmTime > 0 && !isAllDay {
 		builder.WriteString("BEGIN:VALARM\r\n")
 		builder.WriteString("ACTION:DISPLAY\r\n")
 		builder.WriteString(fmt.Sprintf("TRIGGER:-PT%dM\r\n", g.AlarmTime))

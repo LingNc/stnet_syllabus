@@ -293,6 +293,20 @@ func simplify2DHTML(htmlContent string) string {
 	})
 
 	result.WriteString("</table>\n")
+
+	// 提取环节信息（从底部注释）
+	// 环节数据通常在课表后面的 div 中，格式为：注1、[编号]环节名称 第X-X周 指导老师
+	doc.Find("div").Each(func(i int, div *goquery.Selection) {
+		text := strings.TrimSpace(div.Text())
+		// 检查是否包含环节注释标记
+		if strings.Contains(text, "注1") || strings.Contains(text, "注2") || strings.Contains(text, "注：") {
+			cleanText := cleanWhitespace(text)
+			if cleanText != "" {
+				result.WriteString(fmt.Sprintf("<!-- ACTIVITIES: %s -->\n", cleanText))
+			}
+		}
+	})
+
 	result.WriteString("</body>\n</html>")
 	return result.String()
 }
