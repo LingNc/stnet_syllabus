@@ -2,6 +2,7 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,19 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// CLIOverride 存储命令行参数覆盖值
+type CLIOverride struct {
+	InputPath       string
+	OutputPath      string
+	AIKey           string
+	PromptFilePath  string
+	APIKeyFilePath  string
+	SemesterStart   string
+}
+
+// GlobalOverride 全局 CLI 覆盖值
+var GlobalOverride *CLIOverride
 
 // Config 全局配置
 type Config struct {
@@ -48,6 +62,7 @@ type AIConfig struct {
 type PathsConfig struct {
 	Input           string `yaml:"input"`
 	Output          string `yaml:"output"`
+	ICS             string `yaml:"ics"`
 	TempRaw         string `yaml:"temp_raw"`
 	TempSimplified  string `yaml:"temp_simplified"`
 	TempSplit2D     string `yaml:"temp_split_2d"`
@@ -113,8 +128,8 @@ type ExcelFirstColumnConfig struct {
 // GlobalConfig 全局配置实例
 var GlobalConfig *Config
 
-// Load 加载配置文件
-func Load(configPath string) (*Config, error) {
+// Load 加载配置文件并应用 CLI 覆盖
+func Load(configPath string, override ...*CLIOverride) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
@@ -136,20 +151,68 @@ func Load(configPath string) (*Config, error) {
 		cfg.AI.RequestInterval = 500
 	}
 
+	// 应用 CLI 覆盖（CLI 参数优先级高于配置文件）
+	if len(override) > 0 && override[0] != nil {
+		ov := override[0]
+
+		// 覆盖输入路径
+		if ov.InputPath != "" {
+			cfg.Paths.Input = ov.InputPath
+		}
+
+		// 覆盖输出路径
+		if ov.OutputPath != "" {
+			cfg.Paths.Output = ov.OutputPath
+			// 同步更新派生路径
+			cfg.Paths.TempRaw = filepath.Join(ov.OutputPath, "temp", "raw_xls")
+			cfg.Paths.TempSimplified = filepath.Join(ov.OutputPath, "temp", "simplified_xls")
+			cfg.Paths.TempSplit2D = filepath.Join(ov.OutputPath, "temp", "split", "2d_table")
+			cfg.Paths.TempSplitList = filepath.Join(ov.OutputPath, "temp", "split", "list")
+			cfg.Paths.CSVNormalized = filepath.Join(ov.OutputPath, "csv_normalized")
+			cfg.Paths.Final = filepath.Join(ov.OutputPath, "final")
+			cfg.Paths.ErrorLog = filepath.Join(ov.OutputPath, "error.log")
+		}
+
+		// 覆盖学期开始日期
+		if ov.SemesterStart != "" {
+			cfg.Semester.StartDate = ov.SemesterStart
+		}
+	}
+
 	GlobalConfig = &cfg
 	return &cfg, nil
 }
 
 // GetAPIKey 读取 API 密钥
-func GetAPIKey(configDir string) (string, error) {
+// 优先使用 CLI 传入的密钥，其次从文件读取
+func GetAPIKey(configDir string, cliKey ...string) (string, error) {
+	// 优先使用 CLI 传入的密钥
+	if len(cliKey) > 0 && cliKey[0] != "" {
+		return cliKey[0], nil
+	}
+
+	// 检查是否有 CLI 指定的密钥文件路径
+	if GlobalOverride != nil && GlobalOverride.APIKeyFilePath != "" {
+		data, err := os.ReadFile(GlobalOverride.APIKeyFilePath)
+		if err != nil {
+			return "", fmt.Errorf("读取 API 密钥文件失败: %w", err)
+		}
+		return extractKeyFromData(string(data)), nil
+	}
+
 	keyPath := filepath.Join(configDir, "api.key")
 	data, err := os.ReadFile(keyPath)
 	if err != nil {
 		return "", fmt.Errorf("读取 API 密钥失败: %w", err)
 	}
 
+	return extractKeyFromData(string(data)), nil
+}
+
+// extractKeyFromData 从文件内容中提取密钥
+func extractKeyFromData(data string) string {
 	// 逐行读取，找到非注释的非空行
-	lines := strings.Split(string(data), "\n")
+	lines := strings.Split(data, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		// 跳过空行和注释行
@@ -157,10 +220,18 @@ func GetAPIKey(configDir string) (string, error) {
 			continue
 		}
 		// 返回第一个非注释行
-		return line, nil
+		return line
 	}
+	return ""
+}
 
-	return "", fmt.Errorf("未在 %s 中找到有效的 API 密钥", keyPath)
+// GetPromptFilePath 获取 Prompt 文件路径
+// 优先使用 CLI 指定的路径，其次使用默认路径
+func GetPromptFilePath(configDir string) string {
+	if GlobalOverride != nil && GlobalOverride.PromptFilePath != "" {
+		return GlobalOverride.PromptFilePath
+	}
+	return filepath.Join(configDir, "二维表.prompt")
 }
 
 // EnsureDirs 确保所有必要的目录存在

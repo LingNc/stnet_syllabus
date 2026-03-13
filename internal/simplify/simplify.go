@@ -5,12 +5,126 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
+
+// StudentInfo 学生信息
+type StudentInfo struct {
+	Name         string // 姓名
+	StudentID    string // 学号
+	SemesterCode string // 学期代码
+}
+
+// ExtractStudentInfoFromFile 从 xls 文件中提取学生信息
+// 用于直接处理 xls 文件模式（无 zip/映射表）
+func ExtractStudentInfoFromFile(filePath string) (*StudentInfo, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+
+	// 检测编码并转换为 UTF-8
+	var htmlContent string
+	if isValidUTF8(content) {
+		htmlContent = string(content)
+	} else {
+		decoded, err := decodeGBK(content)
+		if err != nil {
+			return nil, fmt.Errorf("解码失败: %w", err)
+		}
+		htmlContent = decoded
+	}
+
+	return ExtractStudentInfoFromHTML(htmlContent)
+}
+
+// ExtractStudentInfoFromHTML 从 HTML 内容中提取学生信息
+func ExtractStudentInfoFromHTML(htmlContent string) (*StudentInfo, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		return nil, fmt.Errorf("解析 HTML 失败: %w", err)
+	}
+
+	info := &StudentInfo{}
+
+	// 尝试从第一个表格提取学生信息（2D表格式）
+	firstTable := doc.Find("table").First()
+	if firstTable.Length() > 0 {
+		text := firstTable.Text()
+
+		// 提取学号（12位数字）
+		re := regexp.MustCompile(`学号[：:]\s*(\d{12})`)
+		matches := re.FindStringSubmatch(text)
+		if len(matches) >= 2 {
+			info.StudentID = matches[1]
+		}
+
+		// 提取姓名
+		re = regexp.MustCompile(`姓名[：:]\s*([^\s<]+)`)
+		matches = re.FindStringSubmatch(text)
+		if len(matches) >= 2 {
+			info.Name = matches[1]
+		}
+	}
+
+	// 尝试从 div[group='group'] 提取（列表格式）
+	if info.Name == "" || info.StudentID == "" {
+		infoDiv := doc.Find("div[group='group']").First()
+		if infoDiv.Length() > 0 {
+			text := infoDiv.Text()
+
+			if info.StudentID == "" {
+				re := regexp.MustCompile(`学号[：:]\s*(\d{12})`)
+				matches := re.FindStringSubmatch(text)
+				if len(matches) >= 2 {
+					info.StudentID = matches[1]
+				}
+			}
+
+			if info.Name == "" {
+				re := regexp.MustCompile(`姓名[：:]\s*([^\s<]+)`)
+				matches := re.FindStringSubmatch(text)
+				if len(matches) >= 2 {
+					info.Name = matches[1]
+				}
+			}
+		}
+	}
+
+	// 提取学期代码（从隐藏字段）
+	xn := doc.Find("input#xn").AttrOr("value", "")
+	xq := doc.Find("input#xq_m").AttrOr("value", "")
+	if xn != "" && xq != "" {
+		info.SemesterCode = xn + xq
+	}
+
+	// 如果隐藏字段没有，尝试从文本中提取
+	if info.SemesterCode == "" {
+		re := regexp.MustCompile(`(\d{4})-(\d{4})(?:学年)?第([一二12])学期`)
+		matches := re.FindStringSubmatch(htmlContent)
+		if len(matches) >= 4 {
+			startYear := matches[1]
+			semesterNum := "0"
+			if matches[3] == "二" || matches[3] == "2" {
+				semesterNum = "1"
+			}
+			info.SemesterCode = startYear + semesterNum
+		}
+	}
+
+	// 验证必要信息
+	if info.Name == "" || info.StudentID == "" {
+		return nil, fmt.Errorf("无法从文件中提取完整的姓名和学号")
+	}
+
+	return info, nil
+}
 
 // Simplifier HTML 精简器
 type Simplifier struct {
@@ -45,10 +159,20 @@ func (s *Simplifier) SimplifyFile(inputPath, outputPath string) error {
 	}
 
 	// 尝试将 GBK 转换为 UTF-8
-	htmlContent, err := decodeGBK(content)
-	if err != nil {
-		// 如果转换失败，尝试直接使用原内容
+	// 首先检测是否已经是 UTF-8
+	var htmlContent string
+	if isValidUTF8(content) {
+		// 已经是 UTF-8，直接使用
 		htmlContent = string(content)
+	} else {
+		// 尝试 GBK 解码
+		decoded, err := decodeGBK(content)
+		if err != nil {
+			// 解码失败，尝试直接使用原内容
+			htmlContent = string(content)
+		} else {
+			htmlContent = decoded
+		}
 	}
 
 	// 检查是否是有效的HTML格式
@@ -282,6 +406,20 @@ func simplify2DHTML(htmlContent string) string {
 	})
 
 	result.WriteString("</table>\n")
+
+	// 提取环节信息（从底部注释）
+	// 环节数据通常在课表后面的 div 中，格式为：注1、[编号]环节名称 第X-X周 指导老师
+	doc.Find("div").Each(func(i int, div *goquery.Selection) {
+		text := strings.TrimSpace(div.Text())
+		// 检查是否包含环节注释标记
+		if strings.Contains(text, "注1") || strings.Contains(text, "注2") || strings.Contains(text, "注：") {
+			cleanText := cleanWhitespace(text)
+			if cleanText != "" {
+				result.WriteString(fmt.Sprintf("<!-- ACTIVITIES: %s -->\n", cleanText))
+			}
+		}
+	})
+
 	result.WriteString("</body>\n</html>")
 	return result.String()
 }
@@ -345,6 +483,12 @@ func decodeGBK(data []byte) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+// isValidUTF8 检测内容是否是有效的 UTF-8 编码
+// 使用标准库的 utf8.Valid 进行严格检测
+func isValidUTF8(data []byte) bool {
+	return utf8.Valid(data)
 }
 
 // isBinaryContent 检测内容是否是二进制格式（如xlsx）
