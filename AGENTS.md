@@ -409,6 +409,26 @@ stnet_syllabus/
 - [x] 任务2: `-init` 零配置启动
 - [x] 任务3: ICS 日历导出
 
+### 2026-03-13 (fix - ICS格式和环节数据)
+- **修复 ICS 时区定义**:
+  - 添加 VTIMEZONE 组件定义 Asia/Shanghai 时区
+  - 修复小米日历等应用导入时提示时区错误的问题
+  - 代码位置：`internal/ics/ics.go`
+
+- **修复 ICS 格式兼容性问题**:
+  - 将 DTEND 改为 DURATION，避免日历应用解析错误
+  - 统一使用 DURATION:PT1H40M 格式表示课程时长
+  - 代码位置：`internal/ics/ics.go`
+
+- **修复个人版ICS环节数据丢失问题**:
+  - 在 simplify2DHTML 中添加环节信息提取（<!-- ACTIVITIES: -->注释）
+  - 在 simplify2DForAI 中添加环节信息提取（<div class="activity">元素）
+  - 在 ICS 生成器中添加 parseActivityRow 函数，支持环节数据解析
+  - 在 AddFromCSV 中根据表头自动判断是课程还是环节数据
+  - 修改 writeEvent 支持全天事件格式（环节使用 DTSTART;VALUE=DATE 格式）
+  - 修复后列表格式(me-list)的环节数据可以正确导入到ICS
+  - 代码位置：`internal/ics/ics.go`, `internal/simplify/simplify.go`, `internal/parser/ai_parser.go`
+
 ## 可用技能
 
 ### analysis-report
