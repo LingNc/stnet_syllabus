@@ -39,8 +39,14 @@ go mod tidy
 # 编译程序
 go build -o stnet_syllabus ./cmd
 
-# 初始化配置（首次运行）
+# 初始化配置（首次运行），然后配置api密钥
 ./stnet_syllabus -init
+
+# 个人模式
+# 从单个 xls 生成 ics
+./stnet_syllabus -ics-input input/张三_202401010101_20251.xls -ics-output output/张三.ics
+
+# 排班模式
 
 # 执行完整流程
 ./stnet_syllabus
@@ -59,9 +65,6 @@ go build -o stnet_syllabus ./cmd
 ./stnet_syllabus -step excel         # Excel 生成
 ./stnet_syllabus -step ics           # ICS 批量导出
 
-# 个人模式：从单个 xls 生成 ics
-./stnet_syllabus -ics-input input/张三_202401010101_20251.xls -ics-output output/张三.ics
-
 # 跳过 AI 解析（仅处理列表格式）
 ./stnet_syllabus -skip-ai
 
@@ -69,48 +72,6 @@ go build -o stnet_syllabus ./cmd
 ./stnet_syllabus -input ./data -output ./out
 ./stnet_syllabus -aikey YOUR_API_KEY
 ./stnet_syllabus -semester-start 2026-03-02
-```
-
-## 项目结构
-
-```
-stnet_syllabus/
-├── cmd/                 # 命令入口
-│   ├── main.go          # 主程序
-│   ├── embed.go         # 配置嵌入
-│   └── config/          # 默认配置（go:embed）
-│       ├── config.yaml
-│       ├── 二维表.prompt
-│       └── api.key
-├── config/              # 运行时配置（-init 生成，gitignore）
-│   ├── config.yaml
-│   ├── 二维表.prompt
-│   └── api.key
-├── input/               # 输入数据
-├── output/              # 输出数据
-│   ├── ics/             # ICS 日历文件
-│   ├── temp/            # 临时文件
-│   ├── csv_normalized/  # 标准化 CSV
-│   ├── final/           # 最终 Excel 报表
-│   ├── weekly/          # 每周无课表
-│   └── error.log        # 错误日志
-├── internal/            # 内部包
-│   ├── preprocess/      # 数据预处理
-│   ├── simplify/        # HTML 精简
-│   ├── validate/        # 数据验证
-│   ├── split/           # 数据拆分
-│   ├── parser/          # 解析器（含 AI 调用）
-│   ├── aggregate/       # 无课表聚合
-│   ├── weekly/          # 周次切片
-│   ├── excel/           # Excel 生成
-│   ├── ics/             # ICS 日历生成
-│   └── config/          # 配置加载
-├── pkg/                 # 公共包
-│   ├── models/          # 数据模型
-│   └── utils/           # 工具函数
-└── plan/                # 开发计划文档
-    ├── PLAN_0.md
-    └── PLAN_1.md
 ```
 
 ## 配置说明
@@ -136,6 +97,50 @@ paths:
   output: "./output"
   ics: "./output/ics"              # ICS 输出目录
   # ... 其他路径配置
+```
+
+## 项目结构
+
+```
+stnet_syllabus/
+├── cmd/                 # 命令入口
+│   ├── main.go          # 主程序
+│   ├── embed.go         # 配置嵌入
+│   └── config/          # 默认配置（go:embed）
+│       ├── config.yaml
+│       ├── 二维表.prompt
+│       └── api.key
+├── config/              # 运行时配置（-init 生成，gitignore）
+│   ├── config.yaml
+│   ├── 二维表.prompt
+│   └── api.key
+├── input/               # 输入数据（腾讯文档收集表导出）
+│   ├── *.zip            # 收集的所有人的青果导出的xls课程表（可以是二维表也可以是列表）
+│   └── *.xlsx           # 收集的表格（每行姓名、学号和对应的导出课程表文件名）
+├── output/              # 输出数据
+│   ├── ics/             # ICS 日历文件
+│   ├── temp/            # 临时文件
+│   ├── csv_normalized/  # 标准化 CSV
+│   ├── final/           # 最终 Excel 报表
+│   ├── weekly/          # 每周无课表
+│   └── error.log        # 错误日志
+├── internal/            # 内部包
+│   ├── preprocess/      # 数据预处理
+│   ├── simplify/        # HTML 精简
+│   ├── validate/        # 数据验证
+│   ├── split/           # 数据拆分
+│   ├── parser/          # 解析器（含 AI 调用）
+│   ├── aggregate/       # 无课表聚合
+│   ├── weekly/          # 周次切片
+│   ├── excel/           # Excel 生成
+│   ├── ics/             # ICS 日历生成
+│   └── config/          # 配置加载
+├── pkg/                 # 公共包
+│   ├── models/          # 数据模型
+│   └── utils/           # 工具函数
+└── plan/                # 开发计划文档
+    ├── PLAN_0.md
+    └── PLAN_1.md
 ```
 
 ## CLI 参数
