@@ -441,6 +441,7 @@ func runParse(cfg *config.Config, skipAI bool) {
 		aiParser := parser.NewAI2DParser(
 			cfg.Paths.TempSplit2D,
 			cfg.Paths.CSVNormalized,
+			filepath.Join(cfg.Paths.TempSplit2D, "..", "2d_ai_pre"), // AI预处理后的HTML输出目录: split/2d_ai_pre
 			promptFilePath,
 			client,
 			cfg.AI.Concurrency,
@@ -766,7 +767,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 			os.Exit(1)
 		}
 
-		aiParser := parser.NewAI2DParser(tempDir, tempDir, promptFilePath, client, 1)
+		aiParser := parser.NewAI2DParser(tempDir, tempDir, "", promptFilePath, client, 1)
 		aiResult := aiParser.ParseFile(result.CourseFile, string(prompt))
 		if !aiResult.Success {
 			logError("AI 解析失败 [%s]: %s", result.CourseFile, aiResult.Error)

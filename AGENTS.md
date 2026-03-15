@@ -111,8 +111,9 @@ stnet_syllabus/
 │   │   ├── raw_xls/     # 重命名后的原始文件
 │   │   ├── simplified_xls/  # 精简后的 HTML
 │   │   └── split/       # 拆分后的文件
-│   │       ├── 2d_table/
-│   │       └── list/
+│   │       ├── 2d_table/     # 2D表格（需AI解析）
+│   │       ├── 2d_ai_pre/    # AI预处理后的HTML（新增）
+│   │       └── list/         # 列表格式（直接解析）
 │   ├── csv_normalized/  # 标准化 CSV
 │   ├── final/           # 最终 Excel 报表
 │   └── error.log        # 错误日志
