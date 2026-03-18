@@ -13,6 +13,7 @@
 - **周次切片**: 生成每周独立的无课表
 - **Excel 报表**: 美观的 Excel 工作簿输出
 - **ICS 日历导出**: 支持批量和个人模式导出 iCalendar 格式
+- **版本信息**: 支持 `-version/-v` 查看版本号
 
 ## 快速开始
 
@@ -55,6 +56,9 @@ go build -o stnet_syllabus ./cmd
 
 # 执行完整流程并生成 ICS 日历
 ./stnet_syllabus -ics
+
+# 查看版本号
+./stnet_syllabus -version
 
 # 单步执行示例；`-step` 还可用：
 # simplify(HTML精简)、validate(数据验证)、split(数据拆分)
@@ -148,6 +152,7 @@ stnet_syllabus/
 | `-ics-output <file>` | 个人模式：输出 ics 文件 |
 | `-init` | 初始化配置目录 |
 | `-init-force` | 强制覆盖已有配置 |
+| `-version` / `-v` | 显示版本号 |
 
 ## CSV 格式规范
 
@@ -173,6 +178,10 @@ stnet_syllabus/
 
 ## 开发计划
 
+- [x] CLI 参数支持
+- [x] ICS 日历导出
+- [x] 直接 xls 处理模式
+- [x] 版本号显示
 - [ ] 更多的可调节配置
 - [ ] 微服务模式
 - [ ] 单元测试

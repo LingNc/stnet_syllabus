@@ -38,7 +38,7 @@ git merge --no-ff --no-commit develop
 # 3. 排除不需要发布的文件夹/文件
 # 将不需要的文件夹和文件从暂存区和工作区删除（仅在本次 main 分支的提交中删除，不影响 develop）
 # 如果 main 上本来就不存在这些文件，而 develop 上有，这一步会阻止它们进入 main
-git rm -r -f plan example AGENTS.md agent-refer 2>/dev/null || echo "文件夹不存在，跳过清理"
+git rm -r -f plan example AGENTS.md agent-refer .agents 2>/dev/null || echo "文件夹不存在，跳过清理"
 
 # 4. 提交合并，生成版本节点
 git commit -m "xxxxx vx.x.x"

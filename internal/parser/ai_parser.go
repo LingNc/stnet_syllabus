@@ -21,11 +21,12 @@ type AIClient interface {
 
 // AI2DParser 二维表 AI 解析器
 type AI2DParser struct {
-	InputDir     string
-	OutputDir    string
-	PromptFile   string
-	Client       AIClient
-	Concurrency  int
+	InputDir       string
+	OutputDir      string
+	PreprocessDir  string // AI预处理后的HTML输出目录
+	PromptFile     string
+	Client         AIClient
+	Concurrency    int
 }
 
 // AIResult AI 解析结果
@@ -38,16 +39,17 @@ type AIResult struct {
 }
 
 // NewAI2DParser 创建 AI 解析器
-func NewAI2DParser(inputDir, outputDir, promptFile string, client AIClient, concurrency int) *AI2DParser {
+func NewAI2DParser(inputDir, outputDir, preprocessDir, promptFile string, client AIClient, concurrency int) *AI2DParser {
 	if concurrency <= 0 {
 		concurrency = 5
 	}
 	return &AI2DParser{
-		InputDir:    inputDir,
-		OutputDir:   outputDir,
-		PromptFile:  promptFile,
-		Client:      client,
-		Concurrency: concurrency,
+		InputDir:      inputDir,
+		OutputDir:     outputDir,
+		PreprocessDir: preprocessDir,
+		PromptFile:    promptFile,
+		Client:        client,
+		Concurrency:   concurrency,
 	}
 }
 
@@ -55,6 +57,9 @@ func NewAI2DParser(inputDir, outputDir, promptFile string, client AIClient, conc
 func (p *AI2DParser) Process() ([]AIResult, error) {
 	if err := os.MkdirAll(p.OutputDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建输出目录失败: %w", err)
+	}
+	if err := os.MkdirAll(p.PreprocessDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建预处理输出目录失败: %w", err)
 	}
 
 	// 读取 prompt
@@ -141,8 +146,21 @@ func (p *AI2DParser) ParseFile(filePath string, prompt string) AIResult {
 
 	htmlContent := string(content)
 
+	// 生成输出文件名（提前定义 baseName 用于后续保存）
+	fileName := filepath.Base(filePath)
+	baseName := strings.TrimSuffix(fileName, ".xls")
+
 	// 精简 HTML（保留核心表格数据）
 	simplifiedHTML := simplify2DForAI(htmlContent)
+
+	// 保存预处理后的 HTML 到 split/2d_ai_pre 目录
+	if p.PreprocessDir != "" {
+		preprocessFile := filepath.Join(p.PreprocessDir, baseName+"_preprocessed.xls")
+		if err := os.WriteFile(preprocessFile, []byte(simplifiedHTML), 0644); err != nil {
+			// 保存失败不影响主流程，仅记录警告
+			fmt.Printf("  警告: 保存预处理 HTML 失败: %v\n", err)
+		}
+	}
 
 	// 调用 AI
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -153,10 +171,6 @@ func (p *AI2DParser) ParseFile(filePath string, prompt string) AIResult {
 		result.Error = fmt.Sprintf("AI 解析失败: %v", err)
 		return result
 	}
-
-	// 生成输出文件名
-	fileName := filepath.Base(filePath)
-	baseName := strings.TrimSuffix(fileName, ".xls")
 
 	// 保存课程 CSV
 	if courseCSV != "" {
@@ -192,14 +206,13 @@ func simplify2DForAI(htmlContent string) string {
 	var result strings.Builder
 	result.WriteString("<!DOCTYPE html>\n<html>\n<body>\n")
 
-	// 提取学生信息
+	// 提取学生信息（第一行通常是表头，保留原有结构）
 	doc.Find("table").First().Find("tr").Each(func(i int, s *goquery.Selection) {
 		result.WriteString("<tr>")
 		s.Find("td").Each(func(j int, td *goquery.Selection) {
 			text := strings.TrimSpace(td.Text())
-			if text != "" {
-				result.WriteString(fmt.Sprintf("<td>%s</td>", text))
-			}
+			// 保留所有单元格，包括空的
+			result.WriteString(fmt.Sprintf("<td>%s</td>", text))
 		})
 		result.WriteString("</tr>\n")
 	})
@@ -207,18 +220,40 @@ func simplify2DForAI(htmlContent string) string {
 	// 提取课表主体
 	doc.Find("table#mytable, table[name='mytable'], table.schedule").Find("tr").Each(func(i int, row *goquery.Selection) {
 		result.WriteString("<tr>")
+		cells := row.Find("td")
+		cellCount := cells.Length()
+
+		// 检测是否是第一行（星期行）：通常是7列（周一到周日）
+		isWeekHeader := false
+		if i == 0 || cellCount == 7 {
+			// 检查是否包含星期信息
+			firstCell := cells.First().Text()
+			if strings.Contains(firstCell, "星期") || strings.Contains(firstCell, "周一") {
+				isWeekHeader = true
+			}
+		}
+
+		// 如果是星期行，在前面添加"节次\\星期"列
+		if isWeekHeader {
+			result.WriteString("<td>节次\\星期</td>")
+		}
+
 		row.Find("td").Each(func(j int, cell *goquery.Selection) {
+			text := strings.TrimSpace(cell.Text())
+
+			// 剔除"上午"、"下午"、"晚上"等时间分段标签
+			if text == "上午" || text == "下午" || text == "晚上" {
+				return // 跳过此单元格
+			}
+
 			courseNode := cell.Find("div.div1")
 			if courseNode.Length() > 0 {
-				text := strings.TrimSpace(courseNode.Text())
 				result.WriteString(fmt.Sprintf("<td>%s</td>", text))
 			} else if cell.Find("div.div_nokb").Length() > 0 {
 				result.WriteString("<td></td>")
 			} else {
-				text := strings.TrimSpace(cell.Text())
-				if text != "" {
-					result.WriteString(fmt.Sprintf("<td>%s</td>", text))
-				}
+				// 保留所有单元格，包括空的
+				result.WriteString(fmt.Sprintf("<td>%s</td>", text))
 			}
 		})
 		result.WriteString("</tr>\n")

@@ -25,6 +25,12 @@ import (
 	"stnet_syllabus/internal/weekly"
 )
 
+// 版本信息（由 ldflags 注入）
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+)
+
 // errorLog 全局错误日志文件
 var errorLog *os.File
 
@@ -58,12 +64,22 @@ func logError(format string, args ...interface{}) {
 }
 
 func main() {
+	// 自定义 Usage 函数，显示版本号
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "学生网管课程表解析系统 %s (构建时间: %s)\n\n", Version, BuildTime)
+		fmt.Fprintf(os.Stderr, "用法: %s [选项]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "选项:\n")
+		flag.PrintDefaults()
+	}
+
 	// 解析命令行参数
 	var (
 		// 基本参数
 		configFile = flag.String("config", "", "配置文件路径（可选，默认使用嵌入配置或当前目录config/）")
 		step       = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel|ics")
 		skipAI     = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
+		showVersion = flag.Bool("version", false, "显示版本号")
+		showVersionShort = flag.Bool("v", false, "显示版本号（简写）")
 
 		// 路径覆盖参数
 		inputPath  = flag.String("input", "", "输入目录路径（覆盖配置文件）")
@@ -88,6 +104,12 @@ func main() {
 		initForce   = flag.Bool("init-force", false, "强制覆盖已存在的配置文件")
 	)
 	flag.Parse()
+
+	// 处理 -version / -v 参数
+	if *showVersion || *showVersionShort {
+		fmt.Printf("学生网管课程表解析系统 %s (构建时间: %s)\n", Version, BuildTime)
+		os.Exit(0)
+	}
 
 	// 处理 -init 参数
 	if *initFlag {
@@ -441,6 +463,7 @@ func runParse(cfg *config.Config, skipAI bool) {
 		aiParser := parser.NewAI2DParser(
 			cfg.Paths.TempSplit2D,
 			cfg.Paths.CSVNormalized,
+			filepath.Join(cfg.Paths.TempSplit2D, "..", "2d_ai_pre"), // AI预处理后的HTML输出目录: split/2d_ai_pre
 			promptFilePath,
 			client,
 			cfg.AI.Concurrency,
@@ -766,7 +789,7 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 			os.Exit(1)
 		}
 
-		aiParser := parser.NewAI2DParser(tempDir, tempDir, promptFilePath, client, 1)
+		aiParser := parser.NewAI2DParser(tempDir, tempDir, "", promptFilePath, client, 1)
 		aiResult := aiParser.ParseFile(result.CourseFile, string(prompt))
 		if !aiResult.Success {
 			logError("AI 解析失败 [%s]: %s", result.CourseFile, aiResult.Error)
