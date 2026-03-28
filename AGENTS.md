@@ -146,18 +146,22 @@ stnet_syllabus/
 
 ## 状态速览
 
-### 开发进度 (v1.9.0)
+### 开发进度 (v1.10.0)
 - [x] ICS 日历导出（批量模式 + 个人模式）
 - [x] `-init` 零配置启动
 - [x] CLI 参数覆盖（-ics-input, -ics-output 等）
 - [x] 2D 表环节数据提取
+- [x] 校区配置支持（campus）
+- [x] Claude API 支持（api_mode: openai/claude）
+- [x] 组织名称配置（organization）
+- [x] 全局配置重构（globals 配置组）
 
 **完整进度**: 见 `agent-refer/03-开发进度.md`
 
 ### 最新变更
-- 批量ICS导出模式正确包含环节数据
-- 支持直接处理 xls 文件模式（无需 zip/映射表）
-- 修复 2D 表环节数据提取失败问题
+- 新增 globals 配置组，整合 organization、campus、学期信息
+- 支持 Claude API 模式（api_mode: claude）
+- Excel 文件名支持自定义组织和校区名称
 - 环节事件在周一到周五每天都生成
 - 修复 ICS 时区定义 (VTIMEZONE)
 - 修复 ICS 格式兼容性 (DURATION替代DTEND)
@@ -202,7 +206,7 @@ stnet_syllabus/
 - 每次重要变更后，AI 应更新 `agent-refer/` 下的对应文档
 - 保持 AGENTS.md 与 PLAN.md 的描述一致性
 - **Git 操作规范**：根据 `RULE.md` 执行 git 操作（详细请参考`RULE.md`）
-  - 完成一次任务后进行 git 提交
+  - 完成一个任务后务必进行 git 提交
   - **不要添加署名**（不要包含 `Co-Authored-By` 或类似标记）
   - 当前分支是特性/修复分支时，直接提交到当前分支
 

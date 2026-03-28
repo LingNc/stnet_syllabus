@@ -1,17 +1,15 @@
 # 学生网管课程表解析系统 - 全局配置
 
-# 组织名称配置
-organization: "学生网管"
-
-# 校区配置
-campus: "科学"
-
-# 学期配置
-semester:
+# 全局信息配置
+globals:
+  # 组织名称
+  organization: "学生网管"
+  # 校区名称
+  campus: "科学"
   # 学期代码，如 20251 表示 2025-2026 学年第二学期
-  code: "20251"
+  semester_code: "20251"
   # 学期开始日期（第一周周一）
-  start_date: "2026-03-02"
+  semester_start: "2026-03-02"
   # 学期总周数
   total_weeks: 21
   # 复习周（不排班）

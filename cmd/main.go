@@ -551,7 +551,7 @@ func runExcel(cfg *config.Config) {
 	}
 
 	// 生成总表（包含汇总+所有周表），放到output根目录
-	fullScheduleFile := generateFullScheduleFileName(cfg.Semester.Code, cfg.Campus)
+		fullScheduleFile := generateFullScheduleFileName(cfg.Globals.SemesterCode, cfg.Globals.Campus, cfg.Globals.Organization)
 	fullSchedulePath := filepath.Join(cfg.Paths.Output, fullScheduleFile)
 	if err := generator.GenerateFullSchedule(fullSchedulePath); err != nil {
 		fmt.Fprintf(os.Stderr, "生成总表失败: %v\n", err)
@@ -576,15 +576,20 @@ func runExcel(cfg *config.Config) {
 	}
 }
 
-// generateFullScheduleFileName 根据学期代码和校区生成总表文件名
+// generateFullScheduleFileName 根据学期代码、校区和组织名称生成总表文件名
 // 学期代码格式: 20251 (2025-2026学年第二学期)
 // 文件名格式: 学生网管科学校区2025-2026学年第二学期无课表.xlsx
-func generateFullScheduleFileName(semesterCode string, campus string) string {
+func generateFullScheduleFileName(semesterCode string, campus string, organization string) string {
+	// 设置默认值
+	if organization == "" {
+		organization = "学生网管"
+	}
+	if campus == "" {
+		campus = "科学"
+	}
+
 	if len(semesterCode) < 5 {
-		if campus == "" {
-			campus = "科学"
-		}
-		return fmt.Sprintf("学生网管%s校区无课表.xlsx", campus)
+		return fmt.Sprintf("%s%s校区无课表.xlsx", organization, campus)
 	}
 
 	// 提取年份和学期
@@ -601,12 +606,7 @@ func generateFullScheduleFileName(semesterCode string, campus string) string {
 		semesterName = "第二学期"
 	}
 
-	// 校区名称
-	if campus == "" {
-		campus = "科学"
-	}
-
-	return fmt.Sprintf("学生网管%s校区%d-%d学年%s无课表.xlsx", campus, yearInt, nextYear, semesterName)
+	return fmt.Sprintf("%s%s校区%d-%d学年%s无课表.xlsx", organization, campus, yearInt, nextYear, semesterName)
 }
 
 // runICSExport 批量生成 ICS（从 csv_normalized 目录）
