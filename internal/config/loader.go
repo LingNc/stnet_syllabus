@@ -26,15 +26,26 @@ var GlobalOverride *CLIOverride
 
 // Config 全局配置
 type Config struct {
-	Semester   SemesterConfig   `yaml:"semester"`
-	TimeSlots  []TimeSlotConfig `yaml:"time_slots"`
-	AI         AIConfig         `yaml:"ai"`
-	Paths      PathsConfig      `yaml:"paths"`
-	Parser     ParserConfig     `yaml:"parser"`
-	Excel      ExcelConfig      `yaml:"excel"`
+	Globals   GlobalsConfig    `yaml:"globals"`
+	Semester  SemesterConfig   `yaml:"semester"`
+	TimeSlots []TimeSlotConfig `yaml:"time_slots"`
+	AI        AIConfig         `yaml:"ai"`
+	Paths     PathsConfig      `yaml:"paths"`
+	Parser    ParserConfig     `yaml:"parser"`
+	Excel     ExcelConfig      `yaml:"excel"`
 }
 
-// SemesterConfig 学期配置
+// GlobalsConfig 全局信息配置
+type GlobalsConfig struct {
+	Organization    string `yaml:"organization"`
+	Campus          string `yaml:"campus"`
+	SemesterCode    string `yaml:"semester_code"`
+	SemesterStart   string `yaml:"semester_start"`
+	TotalWeeks      int    `yaml:"total_weeks"`
+	ExamReviewWeeks []int  `yaml:"exam_review_weeks"`
+}
+
+// SemesterConfig 学期配置（兼容旧配置，从globals读取）
 type SemesterConfig struct {
 	Code            string `yaml:"code"`
 	StartDate       string `yaml:"start_date"`
@@ -51,6 +62,7 @@ type TimeSlotConfig struct {
 
 // AIConfig AI 接口配置
 type AIConfig struct {
+	APIMode          string `yaml:"api_mode"`
 	BaseURL          string `yaml:"base_url"`
 	Model            string `yaml:"model"`
 	Concurrency      int    `yaml:"concurrency"`
@@ -140,7 +152,35 @@ func Load(configPath string, override ...*CLIOverride) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
-	// 设置默认值
+	// 设置 globals 默认值
+	if cfg.Globals.Organization == "" {
+		cfg.Globals.Organization = "学生网管"
+	}
+	if cfg.Globals.Campus == "" {
+		cfg.Globals.Campus = "科学"
+	}
+	if cfg.Globals.TotalWeeks == 0 {
+		cfg.Globals.TotalWeeks = 21
+	}
+
+	// 同步 globals 到 semester（保持兼容性）
+	if cfg.Semester.Code == "" && cfg.Globals.SemesterCode != "" {
+		cfg.Semester.Code = cfg.Globals.SemesterCode
+	}
+	if cfg.Semester.StartDate == "" && cfg.Globals.SemesterStart != "" {
+		cfg.Semester.StartDate = cfg.Globals.SemesterStart
+	}
+	if cfg.Semester.TotalWeeks == 0 && cfg.Globals.TotalWeeks != 0 {
+		cfg.Semester.TotalWeeks = cfg.Globals.TotalWeeks
+	}
+	if len(cfg.Semester.ExamReviewWeeks) == 0 && len(cfg.Globals.ExamReviewWeeks) > 0 {
+		cfg.Semester.ExamReviewWeeks = cfg.Globals.ExamReviewWeeks
+	}
+
+	// 设置 AI 默认值
+	if cfg.AI.APIMode == "" {
+		cfg.AI.APIMode = "openai"
+	}
 	if cfg.AI.Concurrency == 0 {
 		cfg.AI.Concurrency = 5
 	}

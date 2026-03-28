@@ -1,3 +1,30 @@
+# 项目开发规则
+
+## 提交信息规范
+
+### 功能开发提交
+- 格式：`feat: 中文描述...本次开发进度`
+- 示例：`feat: 添加校区配置支持`
+
+### 修复提交
+- 格式：`fix: 中文描述...修复内容`
+- 示例：`fix: 修复AI解析空指针异常`
+
+### 文档提交
+- 格式：`docs: 中文描述...文档更新内容`
+- 示例：`docs: 更新README配置说明`
+
+### 发布版本提交（main分支）
+- 格式：`release: vx.x.x 简要描述`
+- 示例：`release: v2.1.1 校区配置、组织名称、Claude API支持`
+
+## 版本号规范
+- 格式：`v主版本.次版本.修订版本`
+- 示例：`v2.1.1`
+- 主版本：重大架构变更
+- 次版本：新功能添加
+- 修订版本：bug修复或小改进
+
 ## 分支策略
 1. 拥有两个长期分支：
    - main: 稳定分支。
@@ -41,14 +68,52 @@ git merge --no-ff --no-commit develop
 git rm -r -f plan example AGENTS.md agent-refer .agents 2>/dev/null || echo "文件夹不存在，跳过清理"
 
 # 4. 提交合并，生成版本节点
-git commit -m "xxxxx vx.x.x"
+# 提交信息格式：release: vx.x.x 简要描述
+git commit -m "release: vx.x.x 新增功能简要描述"
 
 # 5. 打标签
-git tag -a vx.x.x -m "xxxxx vx.x.x"
+# 标签信息格式：vx.x.x
+git tag -a vx.x.x -m "vx.x.x"
 
 # 6. 推送
 git push origin main --tags
+
+# 7. 构建并发布 Release
+# 构建项目
+./build.sh
+
+# 创建 GitHub Release
+# 标题格式：vx.x.x（仅版本号）
+# 内容格式：包含更新内容的描述和 Full Changelog 链接
+gh release create vx.x.x --title "vx.x.x" --notes "## 更新内容
+
+- 功能1描述
+- 功能2描述
+
+**Full Changelog**: https://github.com/LingNc/stnet_syllabus/compare/v上一个版本...vx.x.x" build/stnet_syllabus build/stnet_syllabus.exe
 ```
+
+## Release 发布规范
+
+### 发布前检查清单
+- [ ] 所有功能已在 develop 分支测试通过
+- [ ] 版本号已更新（遵循版本号规范）
+- [ ] AGENTS.md 和开发进度文档已更新
+- [ ] 变更日志已记录本次更新内容
+
+### 发布流程
+1. 按照"发布版本"步骤执行合并和标签
+2. 运行 `./build.sh` 构建项目
+3. 创建 GitHub Release，包含：
+   - 标题：仅版本号（如 `v2.1.1`）
+   - 内容：更新内容列表和 Full Changelog 链接
+   - 附件：`stnet_syllabus`（Linux）和 `stnet_syllabus.exe`（Windows）
+
+### 发布后检查
+- [ ] Release 页面可正常访问
+- [ ] 构建文件可正常下载
+- [ ] 版本标签指向正确的提交
+
 5. 修复：如果发布后发现有严重 bug
 从 main 切出 fix/<工具名>/vx.x.x 分支进行修复
 测试稳定后合并回develop和main

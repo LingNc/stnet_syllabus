@@ -30,6 +30,9 @@ DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方co
 ### config.yaml
 系统主配置文件，包含以下配置项：
 
+- **campus**: 校区名称（默认: "科学"）
+  - 用于生成Excel文件名，如"学生网管科学校区2025-2026学年第二学期无课表.xlsx"
+
 - **semester**: 学期配置
   - code: 学期代码（如 20251 表示 2025-2026学年第二学期）
   - start_date: 学期开始日期
@@ -41,8 +44,13 @@ DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方co
   - 用于后续 iCal/日历功能
 
 - **ai**: AI接口配置
-  - base_url: DeepSeek API地址
+  - api_mode: API模式，可选 "openai" (默认，兼容OpenAI格式) 或 "claude" (Anthropic Claude格式)
+  - base_url: API地址
+    - OpenAI模式: https://api.deepseek.com/chat/completions
+    - Claude模式: https://api.anthropic.com/v1/messages
   - model: 模型名称
+    - OpenAI模式: deepseek-chat, gpt-4, etc.
+    - Claude模式: claude-3-5-sonnet-20241022, claude-3-opus-20240229, etc.
   - concurrency: 并发数限制
   - max_retries: 重试次数
   - request_interval: 请求间隔（毫秒）
