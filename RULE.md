@@ -76,6 +76,7 @@
    # 创建 GitHub Release
    # 标题格式：vx.x.x（仅版本号）
    # 内容格式：包含更新内容的描述和 Full Changelog 链接
+   # 附件：stnet_syllabus（Linux）和stnet_syllabus.exe（Windows）
    gh release create vx.x.x --title "vx.x.x" --notes "## 更新内容
 
    - 功能1描述
