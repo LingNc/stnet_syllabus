@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 )
 
@@ -45,8 +48,11 @@ type DeepSeekClient struct {
 // NewDeepSeekClient 创建 DeepSeek 客户端
 func NewDeepSeekClient(apiKey, baseURL, model string, maxRetries, interval int) *DeepSeekClient {
 	if baseURL == "" {
-		baseURL = "https://api.deepseek.com/chat/completions"
+		baseURL = "https://api.deepseek.com"
 	}
+	// 自动拼接 OpenAI 兼容路径
+	baseURL = ensureOpenAIPath(baseURL)
+
 	if model == "" {
 		model = "deepseek-chat"
 	}
@@ -60,6 +66,32 @@ func NewDeepSeekClient(apiKey, baseURL, model string, maxRetries, interval int) 
 		MaxRetries:      maxRetries,
 		RequestInterval: interval,
 	}
+}
+
+// ensureOpenAIPath 确保 baseURL 包含 OpenAI 兼容的完整路径
+// 如果用户只输入了基础路径（如 https://api.deepseek.com），自动拼接 /v1/chat/completions
+func ensureOpenAIPath(baseURL string) string {
+	// 如果已经包含完整路径，直接返回
+	if strings.Contains(baseURL, "/chat/completions") {
+		return baseURL
+	}
+
+	// 解析 URL
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		// 解析失败，返回原值并附加默认路径
+		return baseURL + "/v1/chat/completions"
+	}
+
+	// 检查是否已有 /v1 前缀
+	if strings.HasPrefix(u.Path, "/v1/") || u.Path == "/v1" {
+		u.Path = path.Join(u.Path, "chat/completions")
+	} else {
+		// 添加 /v1/chat/completions
+		u.Path = path.Join(u.Path, "v1/chat/completions")
+	}
+
+	return u.String()
 }
 
 // ChatMessage 聊天消息
@@ -190,8 +222,11 @@ type ClaudeClient struct {
 // NewClaudeClient 创建 Claude 客户端
 func NewClaudeClient(apiKey, baseURL, model string, maxRetries, interval int) *ClaudeClient {
 	if baseURL == "" {
-		baseURL = "https://api.anthropic.com/v1/messages"
+		baseURL = "https://api.anthropic.com"
 	}
+	// 自动拼接 Claude API 路径
+	baseURL = ensureClaudePath(baseURL)
+
 	if model == "" {
 		model = "claude-3-5-sonnet-20241022"
 	}
@@ -205,6 +240,32 @@ func NewClaudeClient(apiKey, baseURL, model string, maxRetries, interval int) *C
 		MaxRetries:      maxRetries,
 		RequestInterval: interval,
 	}
+}
+
+// ensureClaudePath 确保 baseURL 包含 Claude 的完整路径
+// 如果用户只输入了基础路径（如 https://api.anthropic.com），自动拼接 /v1/messages
+func ensureClaudePath(baseURL string) string {
+	// 如果已经包含完整路径，直接返回
+	if strings.Contains(baseURL, "/messages") {
+		return baseURL
+	}
+
+	// 解析 URL
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		// 解析失败，返回原值并附加默认路径
+		return baseURL + "/v1/messages"
+	}
+
+	// 检查是否已有 /v1 前缀
+	if strings.HasPrefix(u.Path, "/v1/") || u.Path == "/v1" {
+		u.Path = path.Join(u.Path, "messages")
+	} else {
+		// 添加 /v1/messages
+		u.Path = path.Join(u.Path, "v1/messages")
+	}
+
+	return u.String()
 }
 
 // ClaudeMessage Claude消息

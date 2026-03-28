@@ -40,7 +40,10 @@ ai:
   # API 地址
   # OpenAI模式: https://api.deepseek.com/chat/completions
   # Claude模式: https://api.anthropic.com/v1/messages
-  base_url: "https://api.deepseek.com/chat/completions"
+  # API 基础地址（只需填写基础URL，程序会自动拼接路由）
+  # OpenAI模式: https://api.deepseek.com 或 https://api.openai.com
+  # Claude模式: https://api.anthropic.com
+  base_url: "https://api.deepseek.com"
   # 模型名称
   # OpenAI模式: deepseek-chat, gpt-4, etc.
   # Claude模式: claude-3-5-sonnet-20241022, claude-3-opus-20240229, etc.
