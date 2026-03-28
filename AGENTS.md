@@ -146,7 +146,7 @@ stnet_syllabus/
 
 ## 状态速览
 
-### 开发进度 (v1.10.0)
+### 开发进度 (v2.1.1)
 - [x] ICS 日历导出（批量模式 + 个人模式）
 - [x] `-init` 零配置启动
 - [x] CLI 参数覆盖（-ics-input, -ics-output 等）
