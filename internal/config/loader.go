@@ -26,6 +26,7 @@ var GlobalOverride *CLIOverride
 
 // Config 全局配置
 type Config struct {
+	Campus     string           `yaml:"campus"`
 	Semester   SemesterConfig   `yaml:"semester"`
 	TimeSlots  []TimeSlotConfig `yaml:"time_slots"`
 	AI         AIConfig         `yaml:"ai"`
@@ -51,6 +52,7 @@ type TimeSlotConfig struct {
 
 // AIConfig AI 接口配置
 type AIConfig struct {
+	APIMode          string `yaml:"api_mode"`
 	BaseURL          string `yaml:"base_url"`
 	Model            string `yaml:"model"`
 	Concurrency      int    `yaml:"concurrency"`
@@ -141,6 +143,12 @@ func Load(configPath string, override ...*CLIOverride) (*Config, error) {
 	}
 
 	// 设置默认值
+	if cfg.Campus == "" {
+		cfg.Campus = "科学"
+	}
+	if cfg.AI.APIMode == "" {
+		cfg.AI.APIMode = "openai"
+	}
 	if cfg.AI.Concurrency == 0 {
 		cfg.AI.Concurrency = 5
 	}

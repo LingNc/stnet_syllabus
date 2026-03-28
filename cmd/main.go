@@ -449,13 +449,16 @@ func runParse(cfg *config.Config, skipAI bool) {
 			return
 		}
 
-		client := parser.NewDeepSeekClient(
-			apiKey,
-			cfg.AI.BaseURL,
-			cfg.AI.Model,
-			cfg.AI.MaxRetries,
-			cfg.AI.RequestInterval,
-		)
+		// 使用工厂方法创建AI客户端
+		factory := &parser.AIClientFactory{
+			APIMode:         cfg.AI.APIMode,
+			APIKey:          apiKey,
+			BaseURL:         cfg.AI.BaseURL,
+			Model:           cfg.AI.Model,
+			MaxRetries:      cfg.AI.MaxRetries,
+			RequestInterval: cfg.AI.RequestInterval,
+		}
+		client := factory.NewAIClient()
 
 		// 使用新的方法获取 Prompt 文件路径
 		promptFilePath := config.GetPromptFilePath(filepath.Dir(cfg.Paths.Input) + "/config")
@@ -548,7 +551,7 @@ func runExcel(cfg *config.Config) {
 	}
 
 	// 生成总表（包含汇总+所有周表），放到output根目录
-	fullScheduleFile := generateFullScheduleFileName(cfg.Semester.Code)
+	fullScheduleFile := generateFullScheduleFileName(cfg.Semester.Code, cfg.Campus)
 	fullSchedulePath := filepath.Join(cfg.Paths.Output, fullScheduleFile)
 	if err := generator.GenerateFullSchedule(fullSchedulePath); err != nil {
 		fmt.Fprintf(os.Stderr, "生成总表失败: %v\n", err)
@@ -573,12 +576,15 @@ func runExcel(cfg *config.Config) {
 	}
 }
 
-// generateFullScheduleFileName 根据学期代码生成总表文件名
+// generateFullScheduleFileName 根据学期代码和校区生成总表文件名
 // 学期代码格式: 20251 (2025-2026学年第二学期)
-// 文件名格式: 学生网管2025-2026学年第二学期无课表.xlsx
-func generateFullScheduleFileName(semesterCode string) string {
+// 文件名格式: 学生网管科学校区2025-2026学年第二学期无课表.xlsx
+func generateFullScheduleFileName(semesterCode string, campus string) string {
 	if len(semesterCode) < 5 {
-		return "学生网管无课表.xlsx"
+		if campus == "" {
+			campus = "科学"
+		}
+		return fmt.Sprintf("学生网管%s校区无课表.xlsx", campus)
 	}
 
 	// 提取年份和学期
@@ -595,7 +601,12 @@ func generateFullScheduleFileName(semesterCode string) string {
 		semesterName = "第二学期"
 	}
 
-	return fmt.Sprintf("学生网管%d-%d学年%s无课表.xlsx", yearInt, nextYear, semesterName)
+	// 校区名称
+	if campus == "" {
+		campus = "科学"
+	}
+
+	return fmt.Sprintf("学生网管%s校区%d-%d学年%s无课表.xlsx", campus, yearInt, nextYear, semesterName)
 }
 
 // runICSExport 批量生成 ICS（从 csv_normalized 目录）
@@ -773,13 +784,16 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 			os.Exit(1)
 		}
 
-		client := parser.NewDeepSeekClient(
-			apiKey,
-			cfg.AI.BaseURL,
-			cfg.AI.Model,
-			cfg.AI.MaxRetries,
-			cfg.AI.RequestInterval,
-		)
+		// 使用工厂方法创建AI客户端
+		factory := &parser.AIClientFactory{
+			APIMode:         cfg.AI.APIMode,
+			APIKey:          apiKey,
+			BaseURL:         cfg.AI.BaseURL,
+			Model:           cfg.AI.Model,
+			MaxRetries:      cfg.AI.MaxRetries,
+			RequestInterval: cfg.AI.RequestInterval,
+		}
+		client := factory.NewAIClient()
 
 		promptFilePath := config.GetPromptFilePath(filepath.Dir(configFilePath))
 		prompt, err := os.ReadFile(promptFilePath)

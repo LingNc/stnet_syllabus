@@ -1,5 +1,11 @@
 # 学生网管课程表解析系统 - 全局配置
 
+# 组织名称配置
+organization: "学生网管"
+
+# 校区配置
+campus: "科学"
+
 # 学期配置
 semester:
   # 学期代码，如 20251 表示 2025-2026 学年第二学期
@@ -31,9 +37,15 @@ time_slots:
 
 # AI 接口配置
 ai:
-  # DeepSeek API 地址
+  # API 模式: "openai" (默认, 兼容OpenAI格式) 或 "claude" (Anthropic Claude格式)
+  api_mode: "openai"
+  # API 地址
+  # OpenAI模式: https://api.deepseek.com/chat/completions
+  # Claude模式: https://api.anthropic.com/v1/messages
   base_url: "https://api.deepseek.com/chat/completions"
   # 模型名称
+  # OpenAI模式: deepseek-chat, gpt-4, etc.
+  # Claude模式: claude-3-5-sonnet-20241022, claude-3-opus-20240229, etc.
   model: "deepseek-chat"
   # 并发数限制
   concurrency: 5
