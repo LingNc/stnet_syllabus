@@ -396,8 +396,8 @@ func runValidate(cfg *config.Config) {
 	// 输出验证成功的学生名单（逗号分隔，仅名字）
 	if len(validNames) > 0 {
 		namesJoined := strings.Join(validNames, ",")
-		logError("验证成功的学生名单: %s", namesJoined)
-		fmt.Printf("\n验证成功的学生: %s\n", namesJoined)
+		logError("验证成功 %d 名学生: %s", len(validNames), namesJoined)
+		fmt.Printf("\n验证成功 %d 名学生: %s\n", len(validNames), namesJoined)
 	}
 
 	if invalidCount > 0 {
