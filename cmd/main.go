@@ -373,9 +373,13 @@ func runValidate(cfg *config.Config) {
 
 	// 记录验证错误并删除无效文件
 	invalidCount := 0
+	var validNames []string
 	for _, r := range results {
-		// 删除验证失败的文件，防止进入后续步骤
-		if !r.Valid {
+		if r.Valid {
+			// 收集验证成功的学生名字
+			validNames = append(validNames, r.Name)
+		} else {
+			// 删除验证失败的文件，防止进入后续步骤
 			if r.Error != "" {
 				logError("验证失败 [%s]: %s", r.FilePath, r.Error)
 			}
@@ -387,6 +391,13 @@ func runValidate(cfg *config.Config) {
 				invalidCount++
 			}
 		}
+	}
+
+	// 输出验证成功的学生名单（逗号分隔，仅名字）
+	if len(validNames) > 0 {
+		namesJoined := strings.Join(validNames, ",")
+		logError("验证成功的学生名单: %s", namesJoined)
+		fmt.Printf("\n验证成功的学生: %s\n", namesJoined)
 	}
 
 	if invalidCount > 0 {
