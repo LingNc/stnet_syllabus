@@ -19,3 +19,4 @@ xls/
 # Temporary files
 *.tmp
 *.log
+*old*

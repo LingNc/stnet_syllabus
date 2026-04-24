@@ -4,15 +4,18 @@
 
 功能：
 1. 访问统一身份认证页面
-2. 获取二维码图片
+2. 获取二维码图片（终端显示或保存图片）
 3. 轮询登录状态
 4. 保存登录后的 Cookie
 
 使用流程：
-1. 运行脚本
+1. 运行脚本（默认终端显示二维码）
 2. 扫描二维码（使用"i轻工大"APP）
 3. 等待登录完成
 4. Cookie 将保存在 cookies.json 文件中
+
+参数说明：
+    --qrcode-png    保存二维码图片到当前目录（默认不保存）
 
 技术细节：
 - 该网站使用 CAS (Central Authentication Service) 统一认证
@@ -28,6 +31,7 @@ import re
 import os
 import uuid as uuid_module
 import io
+import argparse
 from urllib.parse import urljoin, urlparse, parse_qs
 from pathlib import Path
 
@@ -52,7 +56,7 @@ class ZZULICASLoginAgent:
     5. 验证登录 -> 访问教务系统确认登录有效
     """
 
-    def __init__(self, cookie_file=None):
+    def __init__(self, cookie_file=None, save_qr_png=False):
         # 基础 URL
         self.cas_base_url = "https://kys.zzuli.edu.cn/cas"
         self.jwgl_base_url = "https://jwgl.zzuli.edu.cn"
@@ -79,6 +83,7 @@ class ZZULICASLoginAgent:
         self.login_ticket = None
         self.student_id = None
         self.qr_file = None  # 二维码文件路径
+        self.save_qr_png = save_qr_png  # 是否保存二维码图片
 
     def get_login_page(self):
         """
@@ -197,6 +202,33 @@ class ZZULICASLoginAgent:
         except Exception as e:
             print(f"[✗] 生成二维码失败: {e}")
             return None
+
+    def _print_qr_terminal(self, qr_text):
+        """
+        在终端中显示二维码（ASCII 艺术）
+
+        参数：
+            qr_text: 二维码内容文本（URL）
+        """
+        try:
+            import qrcode
+
+            # 直接使用 qrcode 库生成并打印 ASCII 二维码
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=1,
+                border=2,
+            )
+            qr.add_data(qr_text)
+            qr.make(fit=True)
+
+            # 打印 ASCII 二维码
+            qr.print_ascii(invert=True)
+
+        except Exception as e:
+            print(f"[!] 无法在终端显示二维码: {e}")
+            print(f"[*] 请使用 --qrcode-png 参数保存二维码图片")
 
     def poll_login_status(self, timeout=300, interval=1.2):
         """
@@ -326,18 +358,27 @@ class ZZULICASLoginAgent:
             print(f"[i] 获取到登录 ticket: {self.login_ticket[:20]}...")
 
     def _extract_student_id(self):
-        """从教务系统页面提取学号"""
+        """从教务系统 SetMainInfo.jsp 提取学号
+
+        真实学号存在于 /frame/home/js/SetMainInfo.jsp：
+        var _loginid = '542307250130';
+        """
         try:
-            # 访问主页获取学号
+            # 直接访问 SetMainInfo.jsp 获取学号
             resp = self.session.get(
-                f"{self.jwgl_base_url}/student/xkjg.wdkb.jsp?menucode=S20301",
+                f"{self.jwgl_base_url}/frame/home/js/SetMainInfo.jsp",
                 timeout=15
             )
-            match = re.search(r'<input[^>]*id=["\']xh["\'][^>]*value=["\']([^"\']+)["\']', resp.text)
+
+            # 从 JavaScript 变量中提取学号
+            match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', resp.text)
             if match:
                 self.student_id = match.group(1)
                 print(f"[✓] 获取到学号: {self.student_id}")
                 return True
+
+            print("[!] 未能在 SetMainInfo.jsp 中找到学号")
+
         except Exception as e:
             print(f"[!] 提取学号失败: {e}")
         return False
@@ -350,10 +391,6 @@ class ZZULICASLoginAgent:
         for cookie in self.session.cookies:
             cookies[cookie.name] = cookie.value
             cookie_items.append(f"{cookie.name}={cookie.value}")
-
-        # 提取学号
-        if not self.student_id:
-            self._extract_student_id()
 
         return {
             "status": "success",
@@ -378,7 +415,6 @@ class ZZULICASLoginAgent:
             self.cookie_file = self.cookie_dir / f"cookie_{student_id}.json"
         else:
             # 如果无法获取学号，使用时间戳
-            import time
             self.cookie_file = self.cookie_dir / f"cookie_{int(time.time())}.json"
             print("[!] 未能获取学号，使用临时文件名")
 
@@ -475,22 +511,40 @@ class ZZULICASLoginAgent:
             # 步骤 2: 获取二维码 token
             self.get_qr_token()
 
-            # 步骤 3: 获取二维码图片
-            qr_image = self.get_qr_image()
-            if qr_image:
-                # 保存二维码图片到当前工作目录(pwd)供用户扫描
-                self.qr_file = Path.cwd() / "qrcode.png"
-                with open(self.qr_file, "wb") as f:
-                    f.write(qr_image)
-                print(f"[i] 二维码已保存到: {self.qr_file}")
-                print(f"[*] 请使用 'i轻工大' APP 扫描以上二维码")
-                print(f"[*] 或打开当前目录下的 qrcode.png 文件")
-            else:
-                print("[!] 未能获取二维码图片，请手动访问登录页面扫码")
-                print(f"    地址: {self.cas_base_url}/login?service={self.jwgl_base_url}/caslogin")
+            # 步骤 3: 显示二维码
+            if not HAS_QR:
+                print("[✗] 缺少必需的依赖库: qrcode, Pillow")
+                print("[*] 请安装依赖: pip install qrcode pillow")
+                return False
+
+            if not self.qr_token:
+                print("[✗] 未能生成二维码 token")
+                return False
+
+            qr_text = f"{self.cas_base_url}/openAuth?uuid={self.qr_token}"
+
+            # 默认行为：在终端显示二维码
+            print("\n" + "=" * 60)
+            print("请使用 'i轻工大' APP 扫描下方二维码")
+            print("=" * 60)
+            self._print_qr_terminal(qr_text)
+            print("=" * 60 + "\n")
+
+            # 如果指定了 --qrcode-png 参数，同时保存图片
+            if self.save_qr_png:
+                qr_image = self.get_qr_image()
+                if qr_image:
+                    self.qr_file = Path.cwd() / "qrcode.png"
+                    with open(self.qr_file, "wb") as f:
+                        f.write(qr_image)
+                    print(f"[i] 二维码图片已保存到: {self.qr_file}")
 
             # 步骤 4: 轮询等待登录
             result = self.poll_login_status()
+
+            # 步骤 4.5: 提取学号（登录成功后才能访问）
+            self._extract_student_id()
+            result["student_id"] = self.student_id
 
             # 步骤 5: 保存 cookie
             self.save_cookies(result)
@@ -516,7 +570,29 @@ class ZZULICASLoginAgent:
 
 def main():
     """主函数"""
-    agent = ZZULICASLoginAgent()
+    parser = argparse.ArgumentParser(
+        description="郑州轻工业大学教务系统扫码登录脚本",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s                    # 默认模式：终端显示二维码
+  %(prog)s --qrcode-png       # 同时保存二维码图片到 qrcode.png
+
+说明:
+  默认情况下，二维码会直接显示在终端中，无需保存图片。
+  使用 --qrcode-png 参数可以额外保存二维码图片文件。
+        """
+    )
+    parser.add_argument(
+        "--qrcode-png",
+        action="store_true",
+        dest="qrcode_png",
+        help="保存二维码图片到当前目录的 qrcode.png 文件（默认不保存）"
+    )
+
+    args = parser.parse_args()
+
+    agent = ZZULICASLoginAgent(save_qr_png=args.qrcode_png)
     success = agent.run()
 
     if success:

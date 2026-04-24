@@ -124,65 +124,81 @@ class ScheduleExplorer:
             print(f"[✗] 加载 Cookie 失败: {e}")
             return False
 
-    def verify_session(self):
+    def verify_session(self, max_retries=1, retry_delay=5):
         """
         步骤 2: 验证 Session 是否有效
 
         青果系统流程：需要先访问 /caslogin 来激活 CASTGC ticket，
         然后才能访问其他功能页面。
 
+        参数：
+            max_retries: 网络错误时最大重试次数（默认1次）
+            retry_delay: 重试间隔秒数（默认5秒）
+
         返回：
             bool: Session 是否有效
         """
         print("[2/7] 正在验证登录状态...")
 
-        try:
-            # 步骤 2.1: 访问 caslogin 激活 session
-            print("[*] 正在激活 CAS session...")
-            cas_resp = self.session.get(
-                f"{self.jwgl_base_url}/caslogin",
-                timeout=15,
-                allow_redirects=True
-            )
+        attempt = 0
+        while attempt <= max_retries:
+            try:
+                # 步骤 2.1: 访问 caslogin 激活 session
+                print("[*] 正在激活 CAS session...")
+                cas_resp = self.session.get(
+                    f"{self.jwgl_base_url}/caslogin",
+                    timeout=15,
+                    allow_redirects=True
+                )
 
-            # 检查是否成功跳转到了主页
-            if "frame/homes" in cas_resp.url or "frame/home" in cas_resp.url:
-                print(f"[✓] CAS session 激活成功")
-                print(f"[i] 当前页面: {cas_resp.url}")
-                self.home_page_content = cas_resp.text
-                self.home_page_url = cas_resp.url
+                # 检查是否成功跳转到了主页
+                if "frame/homes" in cas_resp.url or "frame/home" in cas_resp.url:
+                    print(f"[✓] CAS session 激活成功")
+                    print(f"[i] 当前页面: {cas_resp.url}")
+                    self.home_page_content = cas_resp.text
+                    self.home_page_url = cas_resp.url
+                    self.session_active = True
+                    return True
+
+                # 如果被重定向到登录页，说明 CASTGC 已过期
+                if "caslogin" in cas_resp.url and cas_resp.url.endswith("caslogin"):
+                    print("[✗] CASTGC 已过期，需要重新登录")
+                    return False
+
+                # 尝试直接访问主页
+                resp = self.session.get(self.jwgl_base_url, timeout=15, allow_redirects=True)
+                final_url = resp.url
+
+                # 检查是否被重定向到登录页
+                if "caslogin" in final_url or "kys.zzuli.edu.cn/cas/login" in final_url:
+                    print("[✗] Session 已过期，需要重新登录")
+                    return False
+
+                # 保存首页内容供后续分析
+                self.home_page_content = resp.text
+                self.home_page_url = final_url
                 self.session_active = True
+
+                # 从主页面提取当前学年学期
+                self._extract_year_term_from_homepage(resp.text)
+
+                print(f"[✓] 登录状态有效")
+                print(f"[i] 当前页面: {final_url}")
                 return True
 
-            # 如果被重定向到登录页，说明 CASTGC 已过期
-            if "caslogin" in cas_resp.url and cas_resp.url.endswith("caslogin"):
-                print("[✗] CASTGC 已过期，需要重新登录")
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                attempt += 1
+                if attempt <= max_retries:
+                    print(f"[!] 网络连接失败: {e}")
+                    print(f"[*] {retry_delay}秒后重试 ({attempt}/{max_retries})...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"[✗] 验证 Session 失败: {e}")
+                    print(f"[*] 已达到最大重试次数 ({max_retries})")
+                    return False
+            except Exception as e:
+                print(f"[✗] 验证 Session 失败: {e}")
                 return False
-
-            # 尝试直接访问主页
-            resp = self.session.get(self.jwgl_base_url, timeout=15, allow_redirects=True)
-            final_url = resp.url
-
-            # 检查是否被重定向到登录页
-            if "caslogin" in final_url or "kys.zzuli.edu.cn/cas/login" in final_url:
-                print("[✗] Session 已过期，需要重新登录")
-                return False
-
-            # 保存首页内容供后续分析
-            self.home_page_content = resp.text
-            self.home_page_url = final_url
-            self.session_active = True
-
-            # 从主页面提取当前学年学期
-            self._extract_year_term_from_homepage(resp.text)
-
-            print(f"[✓] 登录状态有效")
-            print(f"[i] 当前页面: {final_url}")
-            return True
-
-        except Exception as e:
-            print(f"[✗] 验证 Session 失败: {e}")
-            return False
 
     def discover_menu_links(self):
         """
@@ -336,19 +352,29 @@ class ScheduleExplorer:
             main_resp = self.session.get(kb_main_url, timeout=15)
             main_resp.raise_for_status()
 
-            # 从页面提取学号（如果 cookie 中没有）
-            xh_match = re.search(r'<input[^>]*id=["\']xh["\'][^>]*value=["\']([^"\']+)["\']', main_resp.text)
-            if xh_match:
-                xh = xh_match.group(1)
-                if not self.student_id:
-                    self.student_id = xh
-                print(f"[✓] 获取到学号: {xh}")
-            elif self.student_id:
-                xh = self.student_id
-                print(f"[✓] 使用 Cookie 中的学号: {xh}")
+            # 使用 cookie 中的学号（login.py 已正确获取）
+            # 如果 cookie 中没有学号，尝试从 SetMainInfo.jsp 获取
+            if not self.student_id:
+                print("[!] Cookie 中没有学号，尝试从 SetMainInfo.jsp 获取...")
+                try:
+                    info_resp = self.session.get(
+                        f"{self.jwgl_base_url}/frame/home/js/SetMainInfo.jsp",
+                        timeout=15
+                    )
+                    match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', info_resp.text)
+                    if match:
+                        self.student_id = match.group(1)
+                        print(f"[✓] 从 SetMainInfo.jsp 获取到学号: {self.student_id}")
+                    else:
+                        print("[✗] 无法从 SetMainInfo.jsp 获取学号")
+                        return None
+                except Exception as e:
+                    print(f"[✗] 获取学号失败: {e}")
+                    return None
             else:
-                print("[✗] 错误：无法从页面获取学号")
-                return None
+                print(f"[✓] 使用 Cookie 中的学号: {self.student_id}")
+
+            xh = self.student_id
 
             # 从页面提取学生姓名
             # 查找包含姓名的元素，如 <span class="user-name">张三</span>
