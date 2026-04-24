@@ -4,6 +4,7 @@
 
 ## 功能特性
 
+- **教务系统自动获取**: 扫码登录获取 cookies，调用官方 API 导出课表（支持郑州轻工业大学青果教务系统）
 - **数据预处理**: 解压压缩包，根据映射表重命名文件
 - **HTML 精简**: 提取核心表格数据，去除冗余样式
 - **数据验证**: 校验姓名学号一致性，提取学期信息
@@ -26,9 +27,31 @@ cd stnet_syllabus
 
 # 安装 Go 依赖
 go mod tidy
+
+# 安装 Python 脚本依赖（如需自动获取课表）
+pip3 install requests qrcode Pillow
 ```
 
-### 配置
+### 方式一：自动获取课表（推荐，支持郑州轻工业大学）
+
+使用 Python 脚本自动登录教务系统并导出课表：
+
+```bash
+# 1. 登录教务系统
+cd scripts/
+python3 login.py          # 扫码登录，保存 cookies.json
+
+# 2. 导出课表
+python3 get_schedule.py   # 导出课程表_年份_学期.xls
+
+# 3. 生成 ICS 日历
+cd ..
+./stnet_syllabus -ics-input scripts/课程表_*.xls
+```
+
+**详细说明**: 见 `scripts/README.md`
+
+### 方式二：使用现有 XLS 文件
 
 1. 运行`./stnet_syllabus -init` 初始化配置目录 `config/`
 2. 将 API 密钥写入 `config/api.key` 文件
@@ -120,6 +143,10 @@ stnet_syllabus/
 │   ├── final/           # 最终 Excel 报表
 │   ├── weekly/          # 每周无课表
 │   └── error.log        # 错误日志
+├── scripts/             # Python 数据获取脚本（教务系统自动化）
+│   ├── login.py         # 扫码登录获取 cookies
+│   ├── get_schedule.py  # 官方API导出课表
+│   └── README.md        # 详细使用说明
 ├── internal/            # 内部包
 │   ├── preprocess/      # 数据预处理
 │   ├── simplify/        # HTML 精简

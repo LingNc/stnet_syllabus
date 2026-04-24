@@ -56,7 +56,7 @@
    # 如果 main 上本来就不存在这些文件，而 develop 上有，这一步会阻止它们进入 main
    # 注意：如果出现"冲突（修改/删除）"，需要先使用 git reset HEAD 取消暂存，再手动删除
    git reset HEAD plan example AGENTS.md agent-refer .agents 2>/dev/null || true
-   rm -rf plan example AGENTS.md agent-refer .agents 2>/dev/null || echo "文件夹不存在，跳过清理"
+   rm -rf plan example AGENTS.md CLAUDE.md agent-refer .agents 2>/dev/null || echo "文件夹不存在，跳过清理"
 
    # 4. 提交合并，生成版本节点
    # 提交信息格式：release: vx.x.x 简要描述
