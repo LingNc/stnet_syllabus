@@ -82,6 +82,7 @@ class ZZULICASLoginAgent:
         self.qr_token = None
         self.login_ticket = None
         self.student_id = None
+        self.student_name = None
         self.qr_file = None  # 二维码文件路径
         self.save_qr_png = save_qr_png  # 是否保存二维码图片
 
@@ -357,30 +358,41 @@ class ZZULICASLoginAgent:
         if self.login_ticket:
             print(f"[i] 获取到登录 ticket: {self.login_ticket[:20]}...")
 
-    def _extract_student_id(self):
-        """从教务系统 SetMainInfo.jsp 提取学号
+    def _extract_student_info(self):
+        """从教务系统 SetMainInfo.jsp 提取学号和姓名
 
-        真实学号存在于 /frame/home/js/SetMainInfo.jsp：
+        信息存在于 /frame/home/js/SetMainInfo.jsp：
         var _loginid = '542307250130';
+        var _userName = '赵逸飞';
         """
         try:
-            # 直接访问 SetMainInfo.jsp 获取学号
+            # 直接访问 SetMainInfo.jsp 获取用户信息
             resp = self.session.get(
                 f"{self.jwgl_base_url}/frame/home/js/SetMainInfo.jsp",
                 timeout=15
             )
+            text = resp.text
 
-            # 从 JavaScript 变量中提取学号
-            match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', resp.text)
+            # 提取学号
+            match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', text)
             if match:
                 self.student_id = match.group(1)
                 print(f"[✓] 获取到学号: {self.student_id}")
-                return True
+            else:
+                print("[!] 未能在 SetMainInfo.jsp 中找到学号")
 
-            print("[!] 未能在 SetMainInfo.jsp 中找到学号")
+            # 提取姓名
+            name_match = re.search(r'var\s+_userName\s*=\s*["\']([^"\']+)["\']', text)
+            if name_match:
+                self.student_name = name_match.group(1)
+                print(f"[✓] 获取到姓名: {self.student_name}")
+            else:
+                print("[!] 未能在 SetMainInfo.jsp 中找到姓名")
+
+            return bool(self.student_id)
 
         except Exception as e:
-            print(f"[!] 提取学号失败: {e}")
+            print(f"[!] 提取用户信息失败: {e}")
         return False
 
     def _build_success_result(self):
@@ -398,6 +410,7 @@ class ZZULICASLoginAgent:
             "cookies": cookies,
             "cookie_string": "; ".join(cookie_items),
             "student_id": self.student_id,
+            "student_name": self.student_name,
         }
 
     def save_cookies(self, result):
@@ -425,6 +438,7 @@ class ZZULICASLoginAgent:
             "cookies": result.get("cookies"),
             "cookie_string": result.get("cookie_string"),
             "student_id": student_id,
+            "student_name": result.get("student_name"),
             "base_urls": {
                 "cas": self.cas_base_url,
                 "jwgl": self.jwgl_base_url,
@@ -542,9 +556,10 @@ class ZZULICASLoginAgent:
             # 步骤 4: 轮询等待登录
             result = self.poll_login_status()
 
-            # 步骤 4.5: 提取学号（登录成功后才能访问）
-            self._extract_student_id()
+            # 步骤 4.5: 提取学号和姓名（登录成功后才能访问）
+            self._extract_student_info()
             result["student_id"] = self.student_id
+            result["student_name"] = self.student_name
 
             # 步骤 5: 保存 cookie
             self.save_cookies(result)

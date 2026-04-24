@@ -111,13 +111,16 @@ class ScheduleExplorer:
             for name, value in cookies.items():
                 self.session.cookies.set(name, value)
 
-            # 获取学号
+            # 获取学号和姓名
             self.student_id = data.get("student_id")
+            self.student_name = data.get("student_name")
 
             print(f"[✓] 成功加载 Cookie: {self.cookie_file.name}")
             print(f"[i] Cookie 时间: {data.get('datetime', 'unknown')}")
             if self.student_id:
                 print(f"[i] 学号: {self.student_id}")
+            if self.student_name:
+                print(f"[i] 姓名: {self.student_name}")
             return True
 
         except Exception as e:
@@ -213,64 +216,10 @@ class ScheduleExplorer:
         返回：
             dict: 发现的 URL 字典
         """
-        print("[3/7] 正在探索课程表入口...")
-
-        # 常见课程表 URL 模式
-        possible_paths = [
-            "/jsxsd/xskb/xskb_list.do",      # 正方教务经典路径
-            "/jsxsd/xskb/xskb_query.do",
-            "/kbcx/xskbcx",
-            "/kbcx/xs_kb",
-            "/xsgrkbcx",                      # 学生个人课表查询
-            "/xskb",
-            "/kbxx/xskb",
-            "/student/xskb",
-            "/course/schedule",
-            "/jsxsd/framework/xskbcx_list",
-        ]
-
-        discovered = {}
-
-        for path in possible_paths:
-            url = urljoin(self.jwgl_base_url, path)
-            try:
-                resp = self.session.head(url, timeout=10, allow_redirects=True)
-                if resp.status_code == 200:
-                    discovered[path] = url
-                    print(f"[✓] 发现可能入口: {path}")
-            except:
-                pass
-
-        # 从首页内容中解析链接
-        if hasattr(self, 'home_page_content'):
-            # 查找包含"课表"、"课程"、"教学"等关键词的链接
-            patterns = [
-                r'href=["\']([^"\']*xskb[^"\']*)["\']',
-                r'href=["\']([^"\']*kbcx[^"\']*)["\']',
-                r'href=["\']([^"\']*kebiao[^"\']*)["\']',
-                r'href=["\']([^"\']*course[^"\']*schedule[^"\']*)["\']',
-                r'href=["\']([^"\']*jsxsd[^"\']*)["\']',
-            ]
-
-            for pattern in patterns:
-                matches = re.findall(pattern, self.home_page_content, re.IGNORECASE)
-                for match in matches:
-                    if match.startswith("http"):
-                        discovered[match] = match
-                    else:
-                        full_url = urljoin(self.jwgl_base_url, match)
-                        discovered[match] = full_url
-                    print(f"[✓] 从首页发现: {match}")
-
-        self.discovered_urls = discovered
-
-        if not discovered:
-            print("[!] 未自动发现课程表入口，将使用默认路径尝试")
-            self.discovered_urls = {
-                "default": f"{self.jwgl_base_url}/jsxsd/xskb/xskb_list.do"
-            }
-
-        return discovered
+        print("[3/7] 跳过课程表入口探索（使用固定API路径）")
+        # 使用固定路径，无需探索
+        self.discovered_urls = {}
+        return self.discovered_urls
 
     def _fetch_year_term_from_api(self):
         """
@@ -352,8 +301,8 @@ class ScheduleExplorer:
             main_resp = self.session.get(kb_main_url, timeout=15)
             main_resp.raise_for_status()
 
-            # 使用 cookie 中的学号（login.py 已正确获取）
-            # 如果 cookie 中没有学号，尝试从 SetMainInfo.jsp 获取
+            # 使用 cookie 中的学号和姓名（login.py 已正确获取）
+            # 如果 cookie 中没有，尝试从 SetMainInfo.jsp 获取
             if not self.student_id:
                 print("[!] Cookie 中没有学号，尝试从 SetMainInfo.jsp 获取...")
                 try:
@@ -361,30 +310,35 @@ class ScheduleExplorer:
                         f"{self.jwgl_base_url}/frame/home/js/SetMainInfo.jsp",
                         timeout=15
                     )
-                    match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', info_resp.text)
+                    text = info_resp.text
+
+                    # 获取学号
+                    match = re.search(r'var\s+_loginid\s*=\s*["\'](\d+)["\']', text)
                     if match:
                         self.student_id = match.group(1)
                         print(f"[✓] 从 SetMainInfo.jsp 获取到学号: {self.student_id}")
                     else:
                         print("[✗] 无法从 SetMainInfo.jsp 获取学号")
                         return None
+
+                    # 获取姓名
+                    name_match = re.search(r'var\s+_userName\s*=\s*["\']([^"\']+)["\']', text)
+                    if name_match:
+                        self.student_name = name_match.group(1)
+                        print(f"[✓] 从 SetMainInfo.jsp 获取到姓名: {self.student_name}")
+
                 except Exception as e:
                     print(f"[✗] 获取学号失败: {e}")
                     return None
             else:
                 print(f"[✓] 使用 Cookie 中的学号: {self.student_id}")
+                if self.student_name:
+                    print(f"[✓] 使用 Cookie 中的姓名: {self.student_name}")
 
             xh = self.student_id
 
-            # 从页面提取学生姓名
-            # 查找包含姓名的元素，如 <span class="user-name">张三</span>
-            name_match = re.search(r'<span[^>]*user[^>]*>([^<]+)</span>', main_resp.text, re.IGNORECASE)
-            if not name_match:
-                name_match = re.search(r'欢迎您[^>]*>([^<]+)</', main_resp.text)
-            if name_match:
-                self.student_name = name_match.group(1).strip()
-                print(f"[✓] 获取到姓名: {self.student_name}")
-            else:
+            # 姓名已从 cookie 或 SetMainInfo.jsp 获取，无需再从页面提取
+            if not self.student_name:
                 self.student_name = "未知"
                 print("[!] 未能获取姓名，使用默认值")
 

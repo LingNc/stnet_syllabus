@@ -20,3 +20,4 @@ xls/
 *.tmp
 *.log
 *old*
+*test*
