@@ -1,6 +1,21 @@
 # Python 脚本（教务系统数据获取）
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Cookies (sensitive)
 cookies.json
+cookie/
+
+# Output files
 课程表_*.xls
 *.html
-__pycache__
-*.pyc
+xls/
+
+# Temporary files
+*.tmp
+*.log

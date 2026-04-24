@@ -42,11 +42,11 @@ cd scripts/
 python3 login.py          # 扫码登录，保存 cookies.json
 
 # 2. 导出课表
-python3 get_schedule.py   # 导出课程表_年份_学期.xls
+python3 get_schedule.py   # 导出 xls/<姓名>_<学号>_<学年学期>.xls
 
-# 3. 生成 ICS 日历
+# 3. 生成 ICS 日历（可选）
 cd ..
-./stnet_syllabus -ics-input scripts/课程表_*.xls
+./stnet_syllabus -ics-input scripts/xls/<姓名>_<学号>_<学年学期>.xls
 ```
 
 **详细说明**: 见 `scripts/README.md`

@@ -25,11 +25,11 @@ python3 login.py
 
 # 2. 导出课表
 python3 get_schedule.py
-# 输出: 课程表_2025_1.xls
+# 输出: xls/<姓名>_<学号>_<学年学期>.xls
 
 # 3. 生成 ICS 日历
 cd ..
-./stnet_syllabus -ics-input scripts/课程表_2025_1.xls -ics-output output/calendar.ics
+./stnet_syllabus -ics-input scripts/xls/<姓名>_<学号>_<学年学期>.xls -ics-output output/calendar.ics
 ```
 
 **详细说明**: 见 `scripts/README.md`

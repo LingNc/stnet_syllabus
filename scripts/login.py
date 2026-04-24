@@ -52,7 +52,7 @@ class ZZULICASLoginAgent:
     5. 验证登录 -> 访问教务系统确认登录有效
     """
 
-    def __init__(self, cookie_file="cookies.json"):
+    def __init__(self, cookie_file=None):
         # 基础 URL
         self.cas_base_url = "https://kys.zzuli.edu.cn/cas"
         self.jwgl_base_url = "https://jwgl.zzuli.edu.cn"
@@ -68,9 +68,17 @@ class ZZULICASLoginAgent:
             "Upgrade-Insecure-Requests": "1",
         })
 
-        self.cookie_file = Path(cookie_file)
+        # 脚本所在目录
+        self.script_dir = Path(__file__).parent.absolute()
+        # cookie 保存目录
+        self.cookie_dir = self.script_dir / "cookie"
+        self.cookie_dir.mkdir(exist_ok=True)
+
+        self.cookie_file = cookie_file
         self.qr_token = None
         self.login_ticket = None
+        self.student_id = None
+        self.qr_file = None  # 二维码文件路径
 
     def get_login_page(self):
         """
@@ -317,6 +325,23 @@ class ZZULICASLoginAgent:
         if self.login_ticket:
             print(f"[i] 获取到登录 ticket: {self.login_ticket[:20]}...")
 
+    def _extract_student_id(self):
+        """从教务系统页面提取学号"""
+        try:
+            # 访问主页获取学号
+            resp = self.session.get(
+                f"{self.jwgl_base_url}/student/xkjg.wdkb.jsp?menucode=S20301",
+                timeout=15
+            )
+            match = re.search(r'<input[^>]*id=["\']xh["\'][^>]*value=["\']([^"\']+)["\']', resp.text)
+            if match:
+                self.student_id = match.group(1)
+                print(f"[✓] 获取到学号: {self.student_id}")
+                return True
+        except Exception as e:
+            print(f"[!] 提取学号失败: {e}")
+        return False
+
     def _build_success_result(self):
         """构建登录成功结果"""
         # 处理可能有重复 name 的 cookie
@@ -326,11 +351,16 @@ class ZZULICASLoginAgent:
             cookies[cookie.name] = cookie.value
             cookie_items.append(f"{cookie.name}={cookie.value}")
 
+        # 提取学号
+        if not self.student_id:
+            self._extract_student_id()
+
         return {
             "status": "success",
             "ticket": self.login_ticket,
             "cookies": cookies,
             "cookie_string": "; ".join(cookie_items),
+            "student_id": self.student_id,
         }
 
     def save_cookies(self, result):
@@ -342,12 +372,23 @@ class ZZULICASLoginAgent:
         """
         print(f"[5/5] 正在保存 Cookie...")
 
+        # 获取学号用于文件名
+        student_id = result.get("student_id") or self.student_id
+        if student_id:
+            self.cookie_file = self.cookie_dir / f"cookie_{student_id}.json"
+        else:
+            # 如果无法获取学号，使用时间戳
+            import time
+            self.cookie_file = self.cookie_dir / f"cookie_{int(time.time())}.json"
+            print("[!] 未能获取学号，使用临时文件名")
+
         save_data = {
             "timestamp": time.time(),
             "datetime": time.strftime("%Y-%m-%d %H:%M:%S"),
             "ticket": result.get("ticket"),
             "cookies": result.get("cookies"),
             "cookie_string": result.get("cookie_string"),
+            "student_id": student_id,
             "base_urls": {
                 "cas": self.cas_base_url,
                 "jwgl": self.jwgl_base_url,
@@ -357,8 +398,13 @@ class ZZULICASLoginAgent:
         with open(self.cookie_file, "w", encoding="utf-8") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
 
-        print(f"[✓] Cookie 已保存到: {self.cookie_file.absolute()}")
+        print(f"[✓] Cookie 已保存到: {self.cookie_file}")
         print(f"[i] 共 {len(result.get('cookies', {}))} 个 cookie")
+
+        # 删除二维码图片
+        if self.qr_file and self.qr_file.exists():
+            self.qr_file.unlink()
+            print(f"[✓] 已清理二维码图片: {self.qr_file}")
 
     def verify_login(self):
         """
@@ -432,12 +478,13 @@ class ZZULICASLoginAgent:
             # 步骤 3: 获取二维码图片
             qr_image = self.get_qr_image()
             if qr_image:
-                # 保存二维码图片供用户扫描
-                qr_file = Path("qrcode.png")
-                with open(qr_file, "wb") as f:
+                # 保存二维码图片到当前工作目录(pwd)供用户扫描
+                self.qr_file = Path.cwd() / "qrcode.png"
+                with open(self.qr_file, "wb") as f:
                     f.write(qr_image)
-                print(f"[i] 二维码已保存到: {qr_file.absolute()}")
-                print(f"[*] 请打开 {qr_file.absolute()} 扫描二维码")
+                print(f"[i] 二维码已保存到: {self.qr_file}")
+                print(f"[*] 请使用 'i轻工大' APP 扫描以上二维码")
+                print(f"[*] 或打开当前目录下的 qrcode.png 文件")
             else:
                 print("[!] 未能获取二维码图片，请手动访问登录页面扫码")
                 print(f"    地址: {self.cas_base_url}/login?service={self.jwgl_base_url}/caslogin")
@@ -474,7 +521,7 @@ def main():
 
     if success:
         print("\n" + "=" * 60)
-        print("登录成功！可以运行 explore_schedule.py 获取课程表")
+        print("登录成功！可以运行 get_schedule.py 获取课程表")
         print("=" * 60)
     else:
         print("\n" + "=" * 60)

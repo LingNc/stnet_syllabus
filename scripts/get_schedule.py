@@ -41,8 +41,16 @@ class ScheduleExplorer:
     7. 导出为 XLS
     """
 
-    def __init__(self, cookie_file="cookies.json"):
-        self.cookie_file = Path(cookie_file)
+    def __init__(self):
+        # 脚本所在目录
+        self.script_dir = Path(__file__).parent.absolute()
+        # cookie 目录
+        self.cookie_dir = self.script_dir / "cookie"
+        # xls 输出目录
+        self.xls_dir = self.script_dir / "xls"
+        self.xls_dir.mkdir(exist_ok=True)
+
+        self.cookie_file = None  # 将在 load_cookies 中设置
         self.jwgl_base_url = "https://jwgl.zzuli.edu.cn"
         self.session = requests.Session()
         self.session.headers.update({
@@ -62,20 +70,33 @@ class ScheduleExplorer:
         self.schedule_data = None
         self.current_xn_xq = None  # 当前学年学期
         self.home_url = None  # 主页URL，用于Referer
+        self.student_name = None  # 学生姓名
+        self.student_id = None  # 学生学号
 
     def load_cookies(self):
         """
-        步骤 1: 从文件加载 Cookie
+        步骤 1: 从 cookie/ 目录加载最新的 Cookie 文件
 
         返回：
             bool: 是否成功加载
         """
         print("[1/7] 正在加载 Cookie...")
 
-        if not self.cookie_file.exists():
-            print(f"[✗] Cookie 文件不存在: {self.cookie_file}")
-            print("[*] 请先运行 login_agent.py 完成登录")
+        if not self.cookie_dir.exists():
+            print(f"[✗] Cookie 目录不存在: {self.cookie_dir}")
+            print("[*] 请先运行 login.py 完成登录")
             return False
+
+        # 查找所有 cookie_*.json 文件
+        cookie_files = sorted(self.cookie_dir.glob("cookie_*.json"))
+        if not cookie_files:
+            print(f"[✗] 未找到 Cookie 文件")
+            print(f"[*] 请在 {self.cookie_dir} 目录中放置 cookie 文件")
+            print("[*] 或先运行 login.py 完成登录")
+            return False
+
+        # 使用最新的 cookie 文件
+        self.cookie_file = cookie_files[-1]
 
         try:
             with open(self.cookie_file, "r", encoding="utf-8") as f:
@@ -90,8 +111,13 @@ class ScheduleExplorer:
             for name, value in cookies.items():
                 self.session.cookies.set(name, value)
 
-            print(f"[✓] 成功加载 {len(cookies)} 个 cookie")
+            # 获取学号
+            self.student_id = data.get("student_id")
+
+            print(f"[✓] 成功加载 Cookie: {self.cookie_file.name}")
             print(f"[i] Cookie 时间: {data.get('datetime', 'unknown')}")
+            if self.student_id:
+                print(f"[i] 学号: {self.student_id}")
             return True
 
         except Exception as e:
@@ -310,14 +336,31 @@ class ScheduleExplorer:
             main_resp = self.session.get(kb_main_url, timeout=15)
             main_resp.raise_for_status()
 
-            # 从页面提取学号（必须）
+            # 从页面提取学号（如果 cookie 中没有）
             xh_match = re.search(r'<input[^>]*id=["\']xh["\'][^>]*value=["\']([^"\']+)["\']', main_resp.text)
             if xh_match:
                 xh = xh_match.group(1)
+                if not self.student_id:
+                    self.student_id = xh
                 print(f"[✓] 获取到学号: {xh}")
+            elif self.student_id:
+                xh = self.student_id
+                print(f"[✓] 使用 Cookie 中的学号: {xh}")
             else:
                 print("[✗] 错误：无法从页面获取学号")
                 return None
+
+            # 从页面提取学生姓名
+            # 查找包含姓名的元素，如 <span class="user-name">张三</span>
+            name_match = re.search(r'<span[^>]*user[^>]*>([^<]+)</span>', main_resp.text, re.IGNORECASE)
+            if not name_match:
+                name_match = re.search(r'欢迎您[^>]*>([^<]+)</', main_resp.text)
+            if name_match:
+                self.student_name = name_match.group(1).strip()
+                print(f"[✓] 获取到姓名: {self.student_name}")
+            else:
+                self.student_name = "未知"
+                print("[!] 未能获取姓名，使用默认值")
 
             # 提取学年学期（调用API获取）
             print("[*] 获取当前学年学期...")
@@ -389,7 +432,7 @@ class ScheduleExplorer:
 
         # 步骤 2: 验证 Session
         if not self.verify_session():
-            print("\n[*] 提示: 请先运行 login_agent.py 重新登录")
+            print("\n[*] 提示: 请先运行 login.py 重新登录")
             return False
 
         # 步骤 3: 探索菜单
@@ -404,10 +447,18 @@ class ScheduleExplorer:
         # 直接保存XLS文件
         print("\n[✓] 成功获取XLS文件")
         xn, xq, jxz = self.current_xn_xq if self.current_xn_xq else self.get_current_semester()
-        filename = f"课程表_{xn}_{xq}.xls"
-        with open(filename, "wb") as f:
+
+        # 构建文件名: <姓名>_<学号>_<学年学期>.xls
+        # 学年学期格式: 20250 (2025学年第一学期) 或 20251 (2025学年第二学期)
+        semester_code = f"{xn}{xq}"
+        name = self.student_name or "未知"
+        student_id = self.student_id or "unknown"
+        filename = f"{name}_{student_id}_{semester_code}.xls"
+        filepath = self.xls_dir / filename
+
+        with open(filepath, "wb") as f:
             f.write(resp.content)
-        print(f"[✓] 课程表已导出: {filename}")
+        print(f"[✓] 课程表已导出: {filepath}")
         print(f"[i] 文件大小: {len(resp.content)} 字节")
         return True
 
