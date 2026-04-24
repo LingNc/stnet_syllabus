@@ -26,11 +26,15 @@ api.key
 !agent-refer
 !build.sh
 
+# Python 脚本
+!scripts/
+
 # 基本文件/夹
 !*code-workspace
 !.gitignore
 !LICENSE
 !README.md
 !AGENTS.md
+!CLAUDE.md
 !PLAN.md
 !RULE.md

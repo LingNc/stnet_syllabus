@@ -15,6 +15,27 @@
 
 ## 快速开始
 
+### 方式一：使用脚本自动获取课表（推荐）
+
+```bash
+# 1. 登录教务系统获取 cookies
+cd scripts/
+python3 login.py
+# 扫描二维码（使用"i轻工大"APP）
+
+# 2. 导出课表
+python3 get_schedule.py
+# 输出: 课程表_2025_1.xls
+
+# 3. 生成 ICS 日历
+cd ..
+./stnet_syllabus -ics-input scripts/课程表_2025_1.xls -ics-output output/calendar.ics
+```
+
+**详细说明**: 见 `scripts/README.md`
+
+### 方式二：使用现有 XLS 文件
+
 ```bash
 # 初始化配置
 ./stnet_syllabus -init
@@ -104,6 +125,10 @@ stnet_syllabus/
 │       ├── api.key      # API 密钥模板（示例）
 │       ├── 二维表.prompt # AI 提示词模板
 │       └── README.md    # 配置说明
+├── scripts/             # Python 数据获取脚本（教务系统自动化）
+│   ├── login_agent.py   # 扫码登录获取 cookies
+│   ├── explore_schedule.py  # 官方API导出课表
+│   └── README.md        # 使用说明
 ├── input/               # 输入数据（运行时创建）
 ├── output/              # 输出数据（运行时创建）
 │   ├── ics/             # ICS 日历文件
@@ -188,13 +213,14 @@ stnet_syllabus/
 **本文档作为项目全局状态机与综述，能够防止代码库膨胀后上下文丢失，确保后续 AI 辅助开发时拥有完整的记忆和设计初衷。**
 
 ### 实时同步要求
-1. 当 PLAN.md 中的流程描述更新时，必须同步更新 AGENTS.md 中的对应章节
-2. **当修复关键 Bug 时，必须在 `agent-refer/02-变更日志.md` 中记录问题和解决方案**
-3. **当添加新功能时，必须在 `agent-refer/02-变更日志.md` 中记录功能说明和实现改动**
-4. 当完成开发任务时，必须更新 `agent-refer/03-开发进度.md` 中的进度清单
-5. 当添加新的技术规范时，必须在 `agent-refer/04-技术规范.md` 中补充
-6. 当功能有较大变更时，必须同步更新 README.md
-7. **隐私策略**：所有文档中不得出现真实人名、学号等敏感信息
+1. 遵守 CLAUDE.md
+2. 当 PLAN.md 中的流程描述更新时，必须同步更新 AGENTS.md 中的对应章节
+3. **当修复关键 Bug 时，必须在 `agent-refer/02-变更日志.md` 中记录问题和解决方案**
+4. **当添加新功能时，必须在 `agent-refer/02-变更日志.md` 中记录功能说明和实现改动**
+5. 当完成开发任务时，必须更新 `agent-refer/03-开发进度.md` 中的进度清单
+6. 当添加新的技术规范时，必须在 `agent-refer/04-技术规范.md` 中补充
+7. 当功能有较大变更时，必须同步更新 README.md
+8. **隐私策略**：所有文档中不得出现真实人名、学号等敏感信息
 
 ### 文档更新原则
 - **必须写**：Bug 修复、功能添加、重大重构必须在对应文档中记录
@@ -211,4 +237,4 @@ stnet_syllabus/
   - 当前分支是特性/修复分支时，直接提交到当前分支
 
 ### 必须做的事
-- 完成用户的任务后，必须回复：“我已严格遵守AGENTS.md。”。
+- 完成用户的任务后，必须回复：“我已严格遵守CLAUDE.md, AGENTS.md。”。

@@ -1,0 +1,6 @@
+# Python 脚本（教务系统数据获取）
+cookies.json
+课程表_*.xls
+*.html
+__pycache__
+*.pyc
