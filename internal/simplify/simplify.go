@@ -255,15 +255,17 @@ func (s *Simplifier) Process() error {
 }
 
 // detectFormat 检测 HTML 格式
+// 注意：二维表（教学安排表）中也可能附带一个列出“上课班级代码”的小表格，
+// 所以必须先判断二维表的专属标记，否则二维表会被误判成列表格式
 func detectFormat(htmlContent string) string {
-	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
-		strings.Contains(htmlContent, "上课班级代码") {
-		return "list"
-	}
 	if strings.Contains(htmlContent, `id='mytable'`) ||
 		strings.Contains(htmlContent, `id="mytable"`) ||
 		strings.Contains(htmlContent, "div_nokb") {
 		return "2d"
+	}
+	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
+		strings.Contains(htmlContent, "上课班级代码") {
+		return "list"
 	}
 	return "unknown"
 }
