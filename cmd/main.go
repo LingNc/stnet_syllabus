@@ -464,6 +464,11 @@ func runParse(cfg *config.Config, skipAI bool) {
 			Model:           cfg.AI.Model,
 			MaxRetries:      cfg.AI.MaxRetries,
 			RequestInterval: cfg.AI.RequestInterval,
+			Thinking: parser.NewThinkingOptions(
+				cfg.AI.Thinking.Type,
+				cfg.AI.Thinking.ClearThinking,
+				cfg.AI.RequestBody.EnableThinking,
+			),
 		}
 		client := factory.NewAIClient()
 
@@ -800,6 +805,11 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 			Model:           cfg.AI.Model,
 			MaxRetries:      cfg.AI.MaxRetries,
 			RequestInterval: cfg.AI.RequestInterval,
+			Thinking: parser.NewThinkingOptions(
+				cfg.AI.Thinking.Type,
+				cfg.AI.Thinking.ClearThinking,
+				cfg.AI.RequestBody.EnableThinking,
+			),
 		}
 		client := factory.NewAIClient()
 

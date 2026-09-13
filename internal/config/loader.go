@@ -62,12 +62,26 @@ type TimeSlotConfig struct {
 
 // AIConfig AI 接口配置
 type AIConfig struct {
-	APIMode          string `yaml:"api_mode"`
-	BaseURL          string `yaml:"base_url"`
-	Model            string `yaml:"model"`
-	Concurrency      int    `yaml:"concurrency"`
-	MaxRetries       int    `yaml:"max_retries"`
-	RequestInterval  int    `yaml:"request_interval"`
+	APIMode          string            `yaml:"api_mode"`
+	BaseURL          string            `yaml:"base_url"`
+	Model            string            `yaml:"model"`
+	Concurrency      int               `yaml:"concurrency"`
+	MaxRetries       int               `yaml:"max_retries"`
+	RequestInterval  int               `yaml:"request_interval"`
+	Thinking         ThinkingConfig    `yaml:"thinking"`
+	RequestBody      RequestBodyConfig `yaml:"request_body"`
+}
+
+// ThinkingConfig 思考模式开关（GLM-4.5+ / DeepSeek 等模型）
+// thinking.type 留空时不向请求体追加该字段
+type ThinkingConfig struct {
+	Type          string `yaml:"type"`           // enabled | disabled
+	ClearThinking *bool  `yaml:"clear_thinking"` // 是否清空上一轮思考内容
+}
+
+// RequestBodyConfig 附加请求体字段（Qwen 3.6+ 等使用 enable_thinking 的模型）
+type RequestBodyConfig struct {
+	EnableThinking *bool `yaml:"enable_thinking"`
 }
 
 // PathsConfig 路径配置
@@ -189,6 +203,14 @@ func Load(configPath string, override ...*CLIOverride) (*Config, error) {
 	}
 	if cfg.AI.RequestInterval == 0 {
 		cfg.AI.RequestInterval = 500
+	}
+
+	// 归一化思考模式配置
+	cfg.AI.Thinking.Type = strings.ToLower(strings.TrimSpace(cfg.AI.Thinking.Type))
+	if cfg.AI.Thinking.Type != "" &&
+		cfg.AI.Thinking.Type != "enabled" && cfg.AI.Thinking.Type != "disabled" {
+		fmt.Printf("警告: ai.thinking.type 取值 %q 无效（应为 enabled 或 disabled），已忽略\n", cfg.AI.Thinking.Type)
+		cfg.AI.Thinking.Type = ""
 	}
 
 	// 应用 CLI 覆盖（CLI 参数优先级高于配置文件）

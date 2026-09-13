@@ -27,6 +27,7 @@ type AI2DParser struct {
 	PromptFile     string
 	Client         AIClient
 	Concurrency    int
+	SkipExisting   bool // 跳过已生成课程 CSV 的文件（支持失败重跑）
 }
 
 // AIResult AI 解析结果
@@ -35,6 +36,7 @@ type AIResult struct {
 	CourseCSV    string
 	ActivityCSV  string
 	Success      bool
+	Skipped      bool // 因已有解析结果而跳过
 	Error        string
 }
 
@@ -50,7 +52,20 @@ func NewAI2DParser(inputDir, outputDir, preprocessDir, promptFile string, client
 		PromptFile:    promptFile,
 		Client:        client,
 		Concurrency:   concurrency,
+		SkipExisting:  true, // 默认跳过已有结果，仅重跑失败文件
 	}
+}
+
+// hasExistingResult 判断该输入文件是否已有解析结果（以课程 CSV 是否存在且非空为准；
+// 环节 CSV 可能为空，故不作为判据，失败的文件不会写出课程 CSV，因此会被重跑）
+func (p *AI2DParser) hasExistingResult(filePath string) bool {
+	if !p.SkipExisting {
+		return false
+	}
+	baseName := strings.TrimSuffix(filepath.Base(filePath), ".xls")
+	courseFile := filepath.Join(p.OutputDir, baseName+"_course.csv")
+	info, err := os.Stat(courseFile)
+	return err == nil && !info.IsDir() && info.Size() > 0
 }
 
 // Process 处理所有文件
@@ -74,7 +89,9 @@ func (p *AI2DParser) Process() ([]AIResult, error) {
 		return nil, fmt.Errorf("读取输入目录失败: %w", err)
 	}
 
+	var results []AIResult
 	var files []string
+	skippedExisting := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -82,7 +99,22 @@ func (p *AI2DParser) Process() ([]AIResult, error) {
 		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".xls") {
 			continue
 		}
-		files = append(files, filepath.Join(p.InputDir, entry.Name()))
+		filePath := filepath.Join(p.InputDir, entry.Name())
+		// 已有解析结果的文件直接跳过（上次失败的文件没有 CSV，会正常重跑）
+		if p.hasExistingResult(filePath) {
+			skippedExisting++
+			fmt.Printf("↷ 已有解析结果，跳过: %s\n", entry.Name())
+			results = append(results, AIResult{
+				InputFile: filePath,
+				Success:   true,
+				Skipped:   true,
+			})
+			continue
+		}
+		files = append(files, filePath)
+	}
+	if skippedExisting > 0 {
+		fmt.Printf("（跳过 %d 个已解析文件，仅重跑未完成的）\n", skippedExisting)
 	}
 
 	// 使用 worker pool 并发处理
@@ -122,10 +154,24 @@ func (p *AI2DParser) Process() ([]AIResult, error) {
 	}()
 
 	// 收集结果
-	var results []AIResult
 	for result := range resultsChan {
 		results = append(results, result)
 	}
+
+	// 输出汇总
+	var okCount, skippedCount, failCount int
+	for _, res := range results {
+		switch {
+		case res.Skipped:
+			skippedCount++
+		case res.Success:
+			okCount++
+		default:
+			failCount++
+		}
+	}
+	fmt.Printf("\nAI 解析汇总: 共 %d 个, 新成功 %d, 跳过(已有结果) %d, 失败 %d\n",
+		len(results), okCount, skippedCount, failCount)
 
 	return results, nil
 }

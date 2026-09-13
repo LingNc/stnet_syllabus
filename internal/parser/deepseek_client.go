@@ -22,17 +22,38 @@ type AIClientFactory struct {
 	Model           string
 	MaxRetries      int
 	RequestInterval int
+	Thinking        *ThinkingOptions
 }
 
 // NewAIClient 根据API模式创建对应的AI客户端
 func (f *AIClientFactory) NewAIClient() AIClient {
 	switch f.APIMode {
 	case "claude":
-		return NewClaudeClient(f.APIKey, f.BaseURL, f.Model, f.MaxRetries, f.RequestInterval)
+		return NewClaudeClient(f.APIKey, f.BaseURL, f.Model, f.MaxRetries, f.RequestInterval, f.Thinking)
 	case "openai":
 		fallthrough
 	default:
-		return NewDeepSeekClient(f.APIKey, f.BaseURL, f.Model, f.MaxRetries, f.RequestInterval)
+		return NewDeepSeekClient(f.APIKey, f.BaseURL, f.Model, f.MaxRetries, f.RequestInterval, f.Thinking)
+	}
+}
+
+// ThinkingOptions 思考模式相关请求参数
+// 全部字段均可选：nil 或零值字段不会写入请求体，避免影响不支持该参数的模型
+type ThinkingOptions struct {
+	Type           string // thinking.type: "enabled" | "disabled"（GLM-4.5+ / DeepSeek）
+	ClearThinking  *bool  // clear_thinking：是否清空上一轮思考内容
+	EnableThinking *bool  // enable_thinking：Qwen 3.6+ 等模型的思考开关
+}
+
+// NewThinkingOptions 根据配置值构建 ThinkingOptions，全部未设置时返回 nil
+func NewThinkingOptions(thinkingType string, clearThinking, enableThinking *bool) *ThinkingOptions {
+	if thinkingType == "" && clearThinking == nil && enableThinking == nil {
+		return nil
+	}
+	return &ThinkingOptions{
+		Type:           thinkingType,
+		ClearThinking:  clearThinking,
+		EnableThinking: enableThinking,
 	}
 }
 
@@ -43,10 +64,11 @@ type DeepSeekClient struct {
 	Model           string
 	MaxRetries      int
 	RequestInterval int
+	Thinking        *ThinkingOptions
 }
 
 // NewDeepSeekClient 创建 DeepSeek 客户端
-func NewDeepSeekClient(apiKey, baseURL, model string, maxRetries, interval int) *DeepSeekClient {
+func NewDeepSeekClient(apiKey, baseURL, model string, maxRetries, interval int, thinking *ThinkingOptions) *DeepSeekClient {
 	if baseURL == "" {
 		baseURL = "https://api.deepseek.com"
 	}
@@ -65,6 +87,7 @@ func NewDeepSeekClient(apiKey, baseURL, model string, maxRetries, interval int) 
 		Model:           model,
 		MaxRetries:      maxRetries,
 		RequestInterval: interval,
+		Thinking:        thinking,
 	}
 }
 
@@ -105,6 +128,31 @@ type ChatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
 	Temperature float64       `json:"temperature,omitempty"`
+	// 思考模式参数（仅当配置中显式设置时才会出现在请求体中）
+	Thinking       *ThinkingParam `json:"thinking,omitempty"`
+	ClearThinking  *bool          `json:"clear_thinking,omitempty"`
+	EnableThinking *bool          `json:"enable_thinking,omitempty"`
+}
+
+// ThinkingParam thinking 参数（GLM-4.5+ / DeepSeek）
+type ThinkingParam struct {
+	Type string `json:"type"`
+}
+
+// applyThinking 把思考模式配置附加到请求体（仅写入已显式设置的字段）
+func (o *ThinkingOptions) applyThinking(req *ChatRequest) {
+	if o == nil {
+		return
+	}
+	if o.Type != "" {
+		req.Thinking = &ThinkingParam{Type: o.Type}
+	}
+	if o.ClearThinking != nil {
+		req.ClearThinking = o.ClearThinking
+	}
+	if o.EnableThinking != nil {
+		req.EnableThinking = o.EnableThinking
+	}
 }
 
 // ChatResponse 聊天响应
@@ -136,6 +184,7 @@ func (c *DeepSeekClient) Parse2DTable(ctx context.Context, htmlContent string, p
 		Messages:    messages,
 		Temperature: 0.1, // 低温度以获得更确定的结果
 	}
+	c.Thinking.applyThinking(&reqBody)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -217,10 +266,13 @@ type ClaudeClient struct {
 	Model           string
 	MaxRetries      int
 	RequestInterval int
+	// Thinking 暂不用于 Claude 模式：Anthropic 原生思考参数格式不同（需 budget_tokens），
+	// 保留字段仅为保持工厂接口一致
+	Thinking *ThinkingOptions
 }
 
 // NewClaudeClient 创建 Claude 客户端
-func NewClaudeClient(apiKey, baseURL, model string, maxRetries, interval int) *ClaudeClient {
+func NewClaudeClient(apiKey, baseURL, model string, maxRetries, interval int, thinking *ThinkingOptions) *ClaudeClient {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}
@@ -239,6 +291,7 @@ func NewClaudeClient(apiKey, baseURL, model string, maxRetries, interval int) *C
 		Model:           model,
 		MaxRetries:      maxRetries,
 		RequestInterval: interval,
+		Thinking:        thinking,
 	}
 }
 

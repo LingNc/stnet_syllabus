@@ -54,6 +54,14 @@ ai:
   max_retries: 3
   # 请求间隔（毫秒）
   request_interval: 500
+  # 思考模式开关（GLM-4.5+ / DeepSeek 等模型）
+  # type 留空或删除该组时，请求体不携带任何思考相关字段
+  thinking:
+    type: disabled             # enabled | disabled
+    clear_thinking: false
+  # 附加请求体字段（Qwen 3.6+ 等使用 enable_thinking 的模型）
+  request_body:
+    enable_thinking: false
 
 # 路径配置
 paths:
