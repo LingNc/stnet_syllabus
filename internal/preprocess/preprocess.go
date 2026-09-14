@@ -19,9 +19,6 @@ import (
 	"stnet_syllabus/internal/simplify"
 )
 
-// attachmentDirName 附件文件夹名，收集表导出的压缩包解压后放在这里
-const attachmentDirName = "附件"
-
 // MappingEntry 映射表条目
 type MappingEntry struct {
 	Name      string // 姓名
@@ -174,24 +171,28 @@ type ImportReport struct {
 // InputLayout 输入目录的布局
 // 支持两种结构：
 //  1. 旧版：映射表 xlsx + 压缩包（都在输入根目录）
-//  2. 新版：映射表 xlsx + 附件/ 文件夹（已解压的课表，可能仍带有原始压缩包）
+//  2. 新版：映射表 xlsx + 附件文件夹（已解压的课表，可能仍带有原始压缩包）
+//
+// 附件文件夹名不要求是「附件」，输入根目录下任何包含课表附件的子文件夹都会被扫描
 type InputLayout struct {
 	MappingFile string   // 映射表 xlsx 路径，未找到时为空
-	CourseFiles []string // 课表附件 .xls/.xlsx（输入根目录 + 附件/），不含映射表
-	Archives    []string // 压缩包 .zip（输入根目录 + 附件/）
+	CourseFiles []string // 课表附件 .xls/.xlsx（输入根目录 + 各子文件夹），不含映射表
+	Archives    []string // 压缩包 .zip（输入根目录 + 各子文件夹）
 }
 
 // ScanInput 扫描输入目录，识别映射表和课表附件
+// 输入根目录及其下所有子文件夹（名字任意）都会被扫描，子文件夹里有 .xls/.xlsx/.zip 即认作附件
 func ScanInput(inputDir string) InputLayout {
 	layout := InputLayout{MappingFile: findMappingFile(inputDir)}
 
-	for _, dir := range []string{inputDir, filepath.Join(inputDir, attachmentDirName)} {
+	// 扫描单个目录：松散 .xls/.xlsx 记为课表附件；
+	// 同一目录下如果已经有解压好的附件，就跳过该目录的压缩包，避免重复导入
+	scanDir := func(dir string) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue
+			return
 		}
 
-		// 同一目录下如果已经有解压好的附件，就跳过该目录的压缩包，避免重复导入
 		var looseFiles, archives []string
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -215,7 +216,34 @@ func ScanInput(inputDir string) InputLayout {
 		}
 	}
 
+	// 输入根目录本身
+	scanDir(inputDir)
+
+	// 输入根目录下的所有子文件夹（名字任意，只要里面有课表附件就认）
+	subdirs, err := listSubDirs(inputDir)
+	if err == nil {
+		for _, dir := range subdirs {
+			scanDir(dir)
+		}
+	}
+
 	return layout
+}
+
+// listSubDirs 列出目录下的直接子文件夹（跳过隐藏目录和 __MACOSX 垃圾目录）
+func listSubDirs(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || entry.Name() == "__MACOSX" {
+			continue
+		}
+		dirs = append(dirs, filepath.Join(dir, entry.Name()))
+	}
+	return dirs, nil
 }
 
 // findMappingFile 在输入根目录中查找映射表
@@ -580,7 +608,7 @@ func (p *Processor) Process() error {
 	fmt.Printf("加载了 %d 条映射记录\n", len(mapping))
 
 	if len(layout.CourseFiles) == 0 && len(layout.Archives) == 0 {
-		return fmt.Errorf("未找到课表附件（%s 或 %s/ 下的 .xls/.xlsx/.zip）", p.InputDir, attachmentDirName)
+		return fmt.Errorf("未找到课表附件（%s 及其子文件夹下的 .xls/.xlsx/.zip）", p.InputDir)
 	}
 
 	p.Report = ImportReport{}

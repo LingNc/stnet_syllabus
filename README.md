@@ -74,7 +74,7 @@ go build -o stnet_syllabus ./cmd
 # 排班模式
 
 # 执行完整流程
-# input放入"所有收集到的xls"或者放入"腾讯文档收集的附件zip和包含姓名、学号和上传文件名映射的xlsx"文件
+# input放入"所有收集到的xls"，或"收集的附件zip/已解压的附件文件夹（子文件夹名任意，有xls即可）+ 包含姓名、学号和上传文件名映射的xlsx"
 ./stnet_syllabus
 
 # 执行完整流程并生成 ICS 日历
