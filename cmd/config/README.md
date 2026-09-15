@@ -64,6 +64,7 @@ DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方co
   - temp_*: 各阶段临时文件目录
   - final: 最终Excel输出目录
 
+  - freeze: 是否冻结首行首列，false 可去掉预览中的灰色分隔线
 - **parser**: 解析配置
   - type1_full_occupy: 环节是否占用全部工作日
   - csv_encoding: CSV文件编码

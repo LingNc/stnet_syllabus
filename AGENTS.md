@@ -185,6 +185,7 @@ stnet_syllabus/
 **完整进度**: 见 `agent-refer/03-开发进度.md`
 
 ### 最新变更
+- 最终 Excel 支持取消冻结窗格（excel.freeze: false 去掉预览中的灰色分隔线），内容区域固定自动换行
 - 预处理支持增量重跑：附件更新自动覆盖（按修改时间取新），过期学生的旧中间结果自动清理，无需手动删除
 - 附件子文件夹不再限定名称：输入目录下任意含课表附件的文件夹都会被扫描
 - AI 请求支持思考模式开关：ai.thinking.type / clear_thinking、ai.request_body.enable_thinking，未配置时不影响请求体

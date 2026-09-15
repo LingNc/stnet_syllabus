@@ -106,6 +106,9 @@ type ParserConfig struct {
 
 // ExcelConfig Excel样式配置
 type ExcelConfig struct {
+	// Freeze 是否冻结首行首列；未设置（nil）时保持冻结，
+	// 显式设为 false 可去掉预览中的灰色冻结分隔线
+	Freeze       *bool                   `yaml:"freeze"`
 	Header       ExcelHeaderConfig       `yaml:"header"`
 	Data         ExcelDataConfig         `yaml:"data"`
 	Column       ExcelColumnConfig       `yaml:"column"`

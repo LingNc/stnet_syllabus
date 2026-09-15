@@ -92,6 +92,8 @@ parser:
 
 # Excel 样式配置
 excel:
+  # 是否冻结首行首列（false 可去掉预览中的灰色分隔线）
+  freeze: true
   # 表头样式
   header:
     # 字体大小
@@ -111,7 +113,7 @@ excel:
   data:
     # 行高
     row_height: 80
-    # 自动换行
+    # 自动换行（内容区固定开启自动换行，此字段保留兼容）
     wrap_text: true
 
   # 第一列（节次列）专用样式
