@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/xuri/excelize/v2"
@@ -163,7 +164,9 @@ func leadingLetters(ref string) string {
 // ImportReport 预处理统计，用于汇总需要人工处理的附件
 type ImportReport struct {
 	Processed   int      // 成功导入
-	Duplicates  int      // 重复附件（压缩包与已解压目录同时存在）
+	Duplicates  int      // 重复附件（与已有版本内容一致，跳过）
+	Updated     []string // 内容有更新的附件（已覆盖 raw 并清理下游旧中间文件）
+	Removed     []string // 本次输入中已不存在的旧中间文件（已连同下游一起清理）
 	Unmatched   []string // 映射表中找不到记录的附件
 	Unsupported []string // 非 HTML 课表（二进制 Excel），需要本人重新导出
 }
@@ -364,15 +367,89 @@ type Processor struct {
 	OutputDir   string
 	MappingFile string
 	Report      ImportReport
+	// DerivedDirs 是后续步骤（简化/拆分/解析）的中间产物目录。
+	// 附件内容有更新时，会自动删除这些目录中以该学生开头的旧文件，使下游结果重新生成。
+	// 留空则只覆盖 raw 文件，不清理下游。
+	DerivedDirs []string
+	// importedBases 记录本次运行确认过的 raw 文件 base（不含扩展名），
+	// 用于收尾时清理「本次输入中已不存在」的孤儿文件
+	importedBases map[string]bool
 }
 
 // NewProcessor 创建预处理器
 func NewProcessor(inputDir, outputDir, mappingFile string) *Processor {
 	return &Processor{
-		InputDir:    inputDir,
-		OutputDir:   outputDir,
-		MappingFile: mappingFile,
+		InputDir:      inputDir,
+		OutputDir:     outputDir,
+		MappingFile:   mappingFile,
+		importedBases: make(map[string]bool),
 	}
+}
+
+// invalidateDerived 删除后续各步骤中该学生的旧中间产物（简化/拆分/解析 CSV 等）。
+// 只匹配以 base 开头且下一个字符是 '_' 或 '.' 的文件，避免「张三_123」误删「张三_1234」。
+func (p *Processor) invalidateDerived(base string) int {
+	cleaned := 0
+	for _, dir := range p.DerivedDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasPrefix(entry.Name(), base) {
+				continue
+			}
+			rest := entry.Name()[len(base):]
+			if rest == "" || (rest[0] != '_' && rest[0] != '.') {
+				continue
+			}
+			if err := os.Remove(filepath.Join(dir, entry.Name())); err == nil {
+				cleaned++
+			}
+		}
+	}
+	return cleaned
+}
+
+// cleanupOrphans 清理 raw 目录中「本次输入不再产生」的文件：
+// 学生撤回了附件、或本次附件变成了不可解析格式时，把旧的 raw 和下游中间文件一并清掉，
+// 保证重跑后最终结果只包含当前输入中有效的数据。
+func (p *Processor) cleanupOrphans() {
+	entries, err := os.ReadDir(p.OutputDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || strings.ToLower(filepath.Ext(entry.Name())) != ".xls" {
+			continue
+		}
+		base := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		if p.importedBases[base] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(p.OutputDir, entry.Name())); err != nil {
+			continue
+		}
+		cleaned := p.invalidateDerived(base)
+		p.Report.Removed = append(p.Report.Removed, entry.Name())
+		fmt.Printf("已清理: %s（本次输入中不存在对应的有效附件），删除旧中间文件 %d 个\n", entry.Name(), cleaned)
+	}
+}
+
+// shouldOverwrite 判断新附件是否应覆盖已有的 raw 文件：内容一致不覆盖；
+// 内容不同时以修改时间 newer 者为准
+func shouldOverwrite(outputPath string, srcMod time.Time, content []byte) (overwrite bool, identical bool) {
+	existing, err := os.ReadFile(outputPath)
+	if err != nil {
+		return true, false
+	}
+	if bytes.Equal(existing, content) {
+		return false, true
+	}
+	if info, err := os.Stat(outputPath); err == nil && !srcMod.After(info.ModTime()) {
+		return false, false // 已有版本更新，保留
+	}
+	return true, false
 }
 
 // LoadMapping 从 Excel 文件加载映射表
@@ -541,15 +618,16 @@ func (p *Processor) ExtractAndRename(zipPath string, mapping []MappingEntry) err
 			continue
 		}
 
-		p.importAttachment(origName, content, index)
+		p.importAttachment(origName, content, file.Modified, index)
 	}
 
 	return nil
 }
 
 // importAttachment 按映射表重命名并写入一个课表附件
-// origName 为附件的原始文件名（含扩展名）
-func (p *Processor) importAttachment(origName string, content []byte, index *fileIndex) {
+// origName 为附件的原始文件名（含扩展名），srcMod 为附件的修改时间（zip 内条目取其打包时间），
+// 用于内容变化时判断哪份更新
+func (p *Processor) importAttachment(origName string, content []byte, srcMod time.Time, index *fileIndex) {
 	entry, found := index.lookup(origName)
 	if !found {
 		fmt.Printf("警告: 附件 %s 在映射表中未找到，跳过\n", origName)
@@ -565,15 +643,39 @@ func (p *Processor) importAttachment(origName string, content []byte, index *fil
 		return
 	}
 
-	outputPath := filepath.Join(p.OutputDir, fmt.Sprintf("%s_%s.xls", entry.Name, entry.StudentID))
+	base := fmt.Sprintf("%s_%s", entry.Name, entry.StudentID)
+	outputPath := filepath.Join(p.OutputDir, base+".xls")
+	if p.importedBases == nil {
+		p.importedBases = make(map[string]bool)
+	}
+
+	existed := false
 	if _, err := os.Stat(outputPath); err == nil {
-		// 压缩包和已解压目录里都有同一份附件时，保留先处理的那一份
-		p.Report.Duplicates++
+		existed = true
+	}
+
+	// 已有旧文件：内容一致视为重复；内容变化视为本人重新提交，用较新的一方覆盖，
+	// 并清理该学生在后续步骤的旧中间文件（简化/拆分/解析 CSV），保证重跑结果为最新
+	overwrite, identical := shouldOverwrite(outputPath, srcMod, content)
+	if !overwrite {
+		p.importedBases[base] = true
+		if identical {
+			p.Report.Duplicates++
+		}
 		return
 	}
 
 	if err := os.WriteFile(outputPath, content, 0644); err != nil {
 		fmt.Printf("错误: 写入文件失败 %s: %v\n", outputPath, err)
+		return
+	}
+	p.importedBases[base] = true
+
+	if existed {
+		cleaned := p.invalidateDerived(base)
+		p.Report.Updated = append(p.Report.Updated, base)
+		fmt.Printf("检测到更新: %s（属于 %s/%s），已覆盖新版本，清理旧中间文件 %d 个\n",
+			origName, entry.Name, entry.StudentID, cleaned)
 		return
 	}
 
@@ -624,7 +726,11 @@ func (p *Processor) Process() error {
 				fmt.Printf("错误: 读取文件失败 %s: %v\n", origName, err)
 				continue
 			}
-			p.importAttachment(origName, content, index)
+			srcMod := time.Time{}
+			if info, err := os.Stat(path); err == nil {
+				srcMod = info.ModTime()
+			}
+			p.importAttachment(origName, content, srcMod, index)
 		}
 	}
 
@@ -636,6 +742,9 @@ func (p *Processor) Process() error {
 		}
 	}
 
+	// 清理本次输入中已不存在的旧结果（学生撤回附件 / 换成了不可解析格式等）
+	p.cleanupOrphans()
+
 	p.printSummary()
 	return nil
 }
@@ -643,10 +752,30 @@ func (p *Processor) Process() error {
 // printSummary 输出预处理汇总，并列出需要人工处理的附件
 func (p *Processor) printSummary() {
 	fmt.Printf("\n预处理完成: 成功 %d", p.Report.Processed)
+	if len(p.Report.Updated) > 0 {
+		fmt.Printf(", 更新覆盖 %d", len(p.Report.Updated))
+	}
 	if p.Report.Duplicates > 0 {
 		fmt.Printf(", 重复跳过 %d", p.Report.Duplicates)
 	}
+	if len(p.Report.Removed) > 0 {
+		fmt.Printf(", 清理过期 %d", len(p.Report.Removed))
+	}
 	fmt.Printf(", 无法解析 %d, 未匹配 %d\n", len(p.Report.Unsupported), len(p.Report.Unmatched))
+
+	if len(p.Report.Updated) > 0 {
+		fmt.Println("\n以下学生的附件内容有更新，已覆盖并清理后续旧中间文件（重跑后续步骤即得最新结果）：")
+		for _, name := range p.Report.Updated {
+			fmt.Printf("  - %s\n", name)
+		}
+	}
+
+	if len(p.Report.Removed) > 0 {
+		fmt.Println("\n以下学生的旧结果在本次输入中已不存在对应的有效附件，已自动清理：")
+		for _, name := range p.Report.Removed {
+			fmt.Printf("  - %s\n", name)
+		}
+	}
 
 	if len(p.Report.Unmatched) > 0 {
 		fmt.Println("\n以下附件在映射表中找不到对应记录，已跳过：")
@@ -722,19 +851,51 @@ func (p *Processor) ProcessDirectXLS() error {
 		// 构建新文件名
 		newFileName := fmt.Sprintf("%s_%s_%s.xls", info.Name, info.StudentID, info.SemesterCode)
 		outputPath := filepath.Join(p.OutputDir, newFileName)
+		base := strings.TrimSuffix(newFileName, ".xls")
+		if p.importedBases == nil {
+			p.importedBases = make(map[string]bool)
+		}
+
+		srcMod := time.Time{}
+		if info0, err := os.Stat(xlsPath); err == nil {
+			srcMod = info0.ModTime()
+		}
+		existed := false
+		if _, err := os.Stat(outputPath); err == nil {
+			existed = true
+		}
+
+		overwrite, identical := shouldOverwrite(outputPath, srcMod, content)
+		if !overwrite {
+			p.importedBases[base] = true
+			if identical {
+				processed++ // 与已有版本一致，视为成功
+			}
+			continue
+		}
 
 		if err := os.WriteFile(outputPath, content, 0644); err != nil {
 			fmt.Printf("  错误: 写入文件失败: %v，跳过\n", err)
 			skipped++
 			continue
 		}
+		p.importedBases[base] = true
 
-		fmt.Printf("  成功: %s -> %s\n", fileName, newFileName)
+		if existed {
+			cleaned := p.invalidateDerived(base)
+			p.Report.Updated = append(p.Report.Updated, base)
+			fmt.Printf("  检测到更新: %s 已覆盖新版本，清理旧中间文件 %d 个\n", newFileName, cleaned)
+		} else {
+			fmt.Printf("  成功: %s -> %s\n", fileName, newFileName)
+		}
 		if info.SemesterCode == "" {
 			fmt.Printf("  警告: 未能提取学期代码，请检查配置文件\n")
 		}
 		processed++
 	}
+
+	// 清理本次输入中已不存在的旧结果
+	p.cleanupOrphans()
 
 	fmt.Printf("\n直接处理完成: 成功 %d, 跳过 %d\n", processed, skipped)
 	return nil

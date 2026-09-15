@@ -292,6 +292,14 @@ func runPreprocess(cfg *config.Config) {
 		cfg.Paths.TempRaw,
 		layout.MappingFile,
 	)
+	// 附件更新/清理时同步删除的下游中间产物目录（简化/拆分/AI预处理/解析CSV）
+	processor.DerivedDirs = []string{
+		cfg.Paths.TempSimplified,
+		cfg.Paths.TempSplit2D,
+		cfg.Paths.TempSplitList,
+		filepath.Join(cfg.Paths.TempSplit2D, "..", "2d_ai_pre"),
+		cfg.Paths.CSVNormalized,
+	}
 
 	switch {
 	case layout.MappingFile != "" && (len(layout.CourseFiles) > 0 || len(layout.Archives) > 0):
@@ -329,6 +337,12 @@ func runPreprocess(cfg *config.Config) {
 
 // logImportReport 把预处理中需要人工处理的附件写入错误日志
 func logImportReport(report preprocess.ImportReport) {
+	for _, base := range report.Updated {
+		logError("附件内容有更新，已覆盖并清理旧中间文件: %s", base)
+	}
+	for _, name := range report.Removed {
+		logError("旧结果在本次输入中已无对应有效附件，已清理: %s", name)
+	}
 	for _, item := range report.Unsupported {
 		logError("附件不是网页格式课表，已跳过（需要重新收集）: %s", item)
 	}
