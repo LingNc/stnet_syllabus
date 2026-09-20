@@ -75,10 +75,10 @@ func main() {
 	// 解析命令行参数
 	var (
 		// 基本参数
-		configFile = flag.String("config", "", "配置文件路径（可选，默认使用嵌入配置或当前目录config/）")
-		step       = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel|ics")
-		skipAI     = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
-		showVersion = flag.Bool("version", false, "显示版本号")
+		configFile       = flag.String("config", "", "配置文件路径（可选，默认使用嵌入配置或当前目录config/）")
+		step             = flag.String("step", "all", "执行步骤: all|preprocess|simplify|validate|split|parse|aggregate|weekly|excel|ics")
+		skipAI           = flag.Bool("skip-ai", false, "跳过 AI 解析（仅处理列表格式）")
+		showVersion      = flag.Bool("version", false, "显示版本号")
 		showVersionShort = flag.Bool("v", false, "显示版本号（简写）")
 
 		// 路径覆盖参数
@@ -94,14 +94,14 @@ func main() {
 		semesterStart = flag.String("semester-start", "", "学期开始日期（格式: YYYY-MM-DD，覆盖配置文件）")
 
 		// ICS 导出参数
-		icsEnabled     = flag.Bool("ics", false, "启用 ICS 日历批量导出（在正常流程后生成所有ics）")
-		icsInputFile   = flag.String("ics-input", "", "输入的 .xls 课表文件路径（个人模式：直接从xls生成ics）")
-		icsOutputFile  = flag.String("ics-output", "", "输出 ICS 文件路径（个人模式使用）")
+		icsEnabled      = flag.Bool("ics", false, "启用 ICS 日历批量导出（在正常流程后生成所有ics）")
+		icsInputFile    = flag.String("ics-input", "", "输入的 .xls 课表文件路径（个人模式：直接从xls生成ics）")
+		icsOutputFile   = flag.String("ics-output", "", "输出 ICS 文件路径（个人模式使用）")
 		icsWithActivity = flag.Bool("ics-activity", true, "个人模式包含环节数据（默认启用）")
 
 		// 初始化参数
-		initFlag    = flag.Bool("init", false, "初始化配置目录（在当前目录创建 config/ 并释放默认配置）")
-		initForce   = flag.Bool("init-force", false, "强制覆盖已存在的配置文件")
+		initFlag  = flag.Bool("init", false, "初始化配置目录（在当前目录创建 config/ 并释放默认配置）")
+		initForce = flag.Bool("init-force", false, "强制覆盖已存在的配置文件")
 	)
 	flag.Parse()
 
@@ -138,12 +138,12 @@ func main() {
 
 	// 设置 CLI 覆盖值
 	config.GlobalOverride = &config.CLIOverride{
-		InputPath:       *inputPath,
-		OutputPath:      *outputPath,
-		AIKey:           *aiKey,
-		PromptFilePath:  *promptFilePath,
-		APIKeyFilePath:  *apiKeyFilePath,
-		SemesterStart:   *semesterStart,
+		InputPath:      *inputPath,
+		OutputPath:     *outputPath,
+		AIKey:          *aiKey,
+		PromptFilePath: *promptFilePath,
+		APIKeyFilePath: *apiKeyFilePath,
+		SemesterStart:  *semesterStart,
 	}
 
 	// 加载配置
@@ -232,11 +232,26 @@ func runAll(cfg *config.Config, skipAI bool) {
 
 	// 继续添加后续步骤
 	steps = append(steps,
-		struct{ name string; fn func() }{"Step 4: 数据拆分", func() { runSplit(cfg) }},
-		struct{ name string; fn func() }{"Step 5: 课表解析", func() { runParse(cfg, skipAI) }},
-		struct{ name string; fn func() }{"Step 6: 空闲时间聚合", func() { runAggregate(cfg) }},
-		struct{ name string; fn func() }{"Step 7: 周次切片", func() { runWeekly(cfg) }},
-		struct{ name string; fn func() }{"Step 8: Excel 生成", func() { runExcel(cfg) }},
+		struct {
+			name string
+			fn   func()
+		}{"Step 4: 数据拆分", func() { runSplit(cfg) }},
+		struct {
+			name string
+			fn   func()
+		}{"Step 5: 课表解析", func() { runParse(cfg, skipAI) }},
+		struct {
+			name string
+			fn   func()
+		}{"Step 6: 空闲时间聚合", func() { runAggregate(cfg) }},
+		struct {
+			name string
+			fn   func()
+		}{"Step 7: 周次切片", func() { runWeekly(cfg) }},
+		struct {
+			name string
+			fn   func()
+		}{"Step 8: Excel 生成", func() { runExcel(cfg) }},
 	)
 
 	// 重新编号步骤
@@ -249,84 +264,60 @@ func runAll(cfg *config.Config, skipAI bool) {
 	fmt.Println("\n=== 所有步骤完成 ===")
 }
 
-// isDirectMode 检测是否为直接处理模式
+// isDirectMode 检测是否为直接处理模式（无映射表，仅有零散的 xls 课表）
 func isDirectMode(inputDir string) bool {
-	entries, err := os.ReadDir(inputDir)
-	if err != nil {
+	layout := preprocess.ScanInput(inputDir)
+	if layout.MappingFile != "" {
 		return false
 	}
 
-	hasZip := false
-	hasXLS := false
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		lowerName := strings.ToLower(entry.Name())
-		if strings.HasSuffix(lowerName, ".zip") {
-			hasZip = true
-		} else if strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
-			hasXLS = true
+	for _, path := range layout.CourseFiles {
+		if !strings.HasSuffix(strings.ToLower(path), ".xlsx") {
+			return true
 		}
 	}
 
-	// 没有 zip 但有 xls 文件，视为直接模式
-	return !hasZip && hasXLS
+	return false
 }
 
 // runPreprocess 执行数据预处理
 // 支持两种模式：
-// 1. 标准模式（zip + xlsx 映射表）：解压 zip 并根据映射表重命名
+// 1. 标准模式（映射表 + 课表附件）：按映射表重命名，附件可以是压缩包或已解压的 附件/ 目录
 // 2. 直接模式（仅 xls）：直接从 xls 提取学生信息并重命名
 func runPreprocess(cfg *config.Config) {
-	entries, err := os.ReadDir(cfg.Paths.Input)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "读取输入目录失败: %v\n", err)
-		logError("读取输入目录失败: %v", err)
-		return
-	}
-
-	// 检测 input 目录内容
-	hasZip := false
-	hasXLS := false
-	hasXLSX := false
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		lowerName := strings.ToLower(entry.Name())
-		if strings.HasSuffix(lowerName, ".zip") {
-			hasZip = true
-		} else if strings.HasSuffix(lowerName, ".xls") && !strings.HasSuffix(lowerName, ".xlsx") {
-			hasXLS = true
-		} else if strings.HasSuffix(lowerName, ".xlsx") {
-			hasXLSX = true
-		}
-	}
+	layout := preprocess.ScanInput(cfg.Paths.Input)
 
 	processor := preprocess.NewProcessor(
 		cfg.Paths.Input,
 		cfg.Paths.TempRaw,
-		"", // MappingFile 会在 Process 中自动查找
+		layout.MappingFile,
 	)
+	// 附件更新/清理时同步删除的下游中间产物目录（简化/拆分/AI预处理/解析CSV）
+	processor.DerivedDirs = []string{
+		cfg.Paths.TempSimplified,
+		cfg.Paths.TempSplit2D,
+		cfg.Paths.TempSplitList,
+		filepath.Join(cfg.Paths.TempSplit2D, "..", "2d_ai_pre"),
+		cfg.Paths.CSVNormalized,
+	}
 
-	if hasZip {
-		// 标准模式：需要 zip + xlsx 映射表
-		fmt.Println("检测到 zip 文件，使用标准预处理模式...")
-
-		if !hasXLSX {
-			fmt.Println("错误: 未找到映射表文件(.xlsx)，标准模式需要映射表")
-			logError("未找到映射表文件")
-			return
-		}
+	switch {
+	case layout.MappingFile != "" && (len(layout.CourseFiles) > 0 || len(layout.Archives) > 0):
+		// 标准模式：需要映射表 + 课表附件
+		fmt.Println("检测到映射表和课表附件，使用标准预处理模式...")
 
 		if err := processor.Process(); err != nil {
 			fmt.Fprintf(os.Stderr, "预处理失败: %v\n", err)
 			logError("预处理失败: %v", err)
+			return
 		}
-	} else if hasXLS {
+		logImportReport(processor.Report)
+
+	case len(layout.Archives) > 0:
+		fmt.Println("错误: 检测到课表附件但未找到映射表文件(.xlsx)，标准模式需要映射表")
+		logError("未找到映射表文件")
+
+	case len(layout.CourseFiles) > 0:
 		// 直接模式：仅 xls 文件
 		fmt.Println("检测到 xls 文件，使用直接处理模式（从文件提取学生信息）...")
 		fmt.Println("提示: 直接模式将跳过数据校验步骤")
@@ -334,10 +325,29 @@ func runPreprocess(cfg *config.Config) {
 		if err := processor.ProcessDirectXLS(); err != nil {
 			fmt.Fprintf(os.Stderr, "直接处理失败: %v\n", err)
 			logError("直接处理失败: %v", err)
+			return
 		}
-	} else {
-		fmt.Println("警告: 未找到 zip 或 xls 文件，跳过预处理")
+		logImportReport(processor.Report)
+
+	default:
+		fmt.Printf("警告: %s 中未找到映射表或课表附件，跳过预处理\n", cfg.Paths.Input)
 		logError("未找到可处理的文件")
+	}
+}
+
+// logImportReport 把预处理中需要人工处理的附件写入错误日志
+func logImportReport(report preprocess.ImportReport) {
+	for _, base := range report.Updated {
+		logError("附件内容有更新，已覆盖并清理旧中间文件: %s", base)
+	}
+	for _, name := range report.Removed {
+		logError("旧结果在本次输入中已无对应有效附件，已清理: %s", name)
+	}
+	for _, item := range report.Unsupported {
+		logError("附件不是网页格式课表，已跳过（需要重新收集）: %s", item)
+	}
+	for _, name := range report.Unmatched {
+		logError("附件未匹配到映射表记录，已跳过: %s", name)
 	}
 }
 
@@ -373,9 +383,13 @@ func runValidate(cfg *config.Config) {
 
 	// 记录验证错误并删除无效文件
 	invalidCount := 0
+	var validNames []string
 	for _, r := range results {
-		// 删除验证失败的文件，防止进入后续步骤
-		if !r.Valid {
+		if r.Valid {
+			// 收集验证成功的学生名字
+			validNames = append(validNames, r.Name)
+		} else {
+			// 删除验证失败的文件，防止进入后续步骤
 			if r.Error != "" {
 				logError("验证失败 [%s]: %s", r.FilePath, r.Error)
 			}
@@ -387,6 +401,13 @@ func runValidate(cfg *config.Config) {
 				invalidCount++
 			}
 		}
+	}
+
+	// 输出验证成功的学生名单（逗号分隔，仅名字）
+	if len(validNames) > 0 {
+		namesJoined := strings.Join(validNames, ",")
+		logError("验证成功 %d 名学生: %s", len(validNames), namesJoined)
+		fmt.Printf("\n验证成功 %d 名学生: %s\n", len(validNames), namesJoined)
 	}
 
 	if invalidCount > 0 {
@@ -457,6 +478,11 @@ func runParse(cfg *config.Config, skipAI bool) {
 			Model:           cfg.AI.Model,
 			MaxRetries:      cfg.AI.MaxRetries,
 			RequestInterval: cfg.AI.RequestInterval,
+			Thinking: parser.NewThinkingOptions(
+				cfg.AI.Thinking.Type,
+				cfg.AI.Thinking.ClearThinking,
+				cfg.AI.RequestBody.EnableThinking,
+			),
 		}
 		client := factory.NewAIClient()
 
@@ -551,7 +577,7 @@ func runExcel(cfg *config.Config) {
 	}
 
 	// 生成总表（包含汇总+所有周表），放到output根目录
-		fullScheduleFile := generateFullScheduleFileName(cfg.Globals.SemesterCode, cfg.Globals.Campus, cfg.Globals.Organization)
+	fullScheduleFile := generateFullScheduleFileName(cfg.Globals.SemesterCode, cfg.Globals.Campus, cfg.Globals.Organization)
 	fullSchedulePath := filepath.Join(cfg.Paths.Output, fullScheduleFile)
 	if err := generator.GenerateFullSchedule(fullSchedulePath); err != nil {
 		fmt.Fprintf(os.Stderr, "生成总表失败: %v\n", err)
@@ -698,6 +724,7 @@ func runICSExport(cfg *config.Config, icsFilePath string) {
 
 	fmt.Printf("\n✓ ICS 批量导出完成，输出目录: %s\n", outputDir)
 }
+
 // 流程: .xls -> 简化 -> 拆分 -> 解析(CSV) -> ICS
 func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath string, skipAI, withActivity bool) {
 	fmt.Println("=== ICS 日历导出模式（个人版）===\n")
@@ -792,6 +819,11 @@ func runICSSingleFile(cfg *config.Config, inputFile, outputFile, configFilePath 
 			Model:           cfg.AI.Model,
 			MaxRetries:      cfg.AI.MaxRetries,
 			RequestInterval: cfg.AI.RequestInterval,
+			Thinking: parser.NewThinkingOptions(
+				cfg.AI.Thinking.Type,
+				cfg.AI.Thinking.ClearThinking,
+				cfg.AI.RequestBody.EnableThinking,
+			),
 		}
 		client := factory.NewAIClient()
 

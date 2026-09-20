@@ -54,6 +54,9 @@ DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方co
   - concurrency: 并发数限制
   - max_retries: 重试次数
   - request_interval: 请求间隔（毫秒）
+  - thinking.type: 思考模式开关，enabled / disabled（GLM-4.5+ / DeepSeek），留空则请求体不携带该字段
+  - thinking.clear_thinking: 是否清空上一轮思考内容
+  - request_body.enable_thinking: Qwen 3.6+ 等模型的思考开关（enable_thinking）
 
 - **paths**: 输入输出路径配置
   - input: 输入目录（放置压缩包和映射表）
@@ -61,6 +64,7 @@ DeepSeek API密钥文件（或配置其他模型提供商的密钥详见下方co
   - temp_*: 各阶段临时文件目录
   - final: 最终Excel输出目录
 
+  - freeze: 是否冻结首行首列，false 可去掉预览中的灰色分隔线
 - **parser**: 解析配置
   - type1_full_occupy: 环节是否占用全部工作日
   - csv_encoding: CSV文件编码

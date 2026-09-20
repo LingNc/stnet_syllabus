@@ -255,15 +255,17 @@ func (s *Simplifier) Process() error {
 }
 
 // detectFormat 检测 HTML 格式
+// 注意：二维表（教学安排表）中也可能附带一个列出“上课班级代码”的小表格，
+// 所以必须先判断二维表的专属标记，否则二维表会被误判成列表格式
 func detectFormat(htmlContent string) string {
-	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
-		strings.Contains(htmlContent, "上课班级代码") {
-		return "list"
-	}
 	if strings.Contains(htmlContent, `id='mytable'`) ||
 		strings.Contains(htmlContent, `id="mytable"`) ||
 		strings.Contains(htmlContent, "div_nokb") {
 		return "2d"
+	}
+	if strings.Contains(htmlContent, `pagetitle="pagetitle"`) ||
+		strings.Contains(htmlContent, "上课班级代码") {
+		return "list"
 	}
 	return "unknown"
 }
@@ -287,10 +289,29 @@ func simplifyListHTML(htmlContent string) string {
 		result.WriteString(fmt.Sprintf("<div class=\"info\">%s</div>\n\n", text))
 	}
 
+	// 如果找不到 group div，尝试查找已简化的 div.info（用于处理已经简化的文件）
+	if infoDiv.Length() == 0 {
+		infoDiv = doc.Find("div.info").First()
+		if infoDiv.Length() > 0 {
+			text := cleanWhitespace(infoDiv.Text())
+			result.WriteString(fmt.Sprintf("<div class=\"info\">%s</div>\n\n", text))
+		}
+	}
+
 	// 提取学期信息
 	if pageTitleDiv.Length() > 0 {
 		text := cleanWhitespace(pageTitleDiv.Text())
 		result.WriteString(fmt.Sprintf("<!-- SEMESTER: %s -->\n", text))
+	}
+
+	// 如果找不到 pageTitleDiv，尝试从已有的 SEMESTER 注释中提取（用于处理已经简化的文件）
+	if pageTitleDiv.Length() == 0 {
+		// 直接从原始 HTML 内容中查找 SEMESTER 注释
+		re := regexp.MustCompile(`<!-- SEMESTER: (.+?) -->`)
+		matches := re.FindStringSubmatch(htmlContent)
+		if len(matches) >= 2 {
+			result.WriteString(fmt.Sprintf("<!-- SEMESTER: %s -->\n", matches[1]))
+		}
 	}
 
 	// 遍历所有数据表格

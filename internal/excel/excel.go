@@ -152,7 +152,7 @@ func (g *Generator) addSummarySheet(f *excelize.File) error {
 	}
 
 	// 设置样式
-	g.setSheetStyle(f, "汇总表", len(records[0]), len(records))
+	g.setSheetStyle(f, "汇总表", gridMaxCols(records), len(records))
 
 	return nil
 }
@@ -180,7 +180,7 @@ func (g *Generator) addWeekSheet(f *excelize.File, week int, csvFile string) err
 	}
 
 	// 设置样式
-	g.setSheetStyle(f, sheetName, len(records[0]), len(records))
+	g.setSheetStyle(f, sheetName, gridMaxCols(records), len(records))
 
 	return nil
 }
@@ -196,6 +196,17 @@ func (g *Generator) readCSV(filePath string) ([][]string, error) {
 	reader := csv.NewReader(file)
 	reader.FieldsPerRecord = -1 // 允许变长字段
 	return reader.ReadAll()
+}
+
+// gridMaxCols 取整个网格的最大列数（某些数据行可能比表头行更长）
+func gridMaxCols(records [][]string) int {
+	maxCols := 0
+	for _, row := range records {
+		if len(row) > maxCols {
+			maxCols = len(row)
+		}
+	}
+	return maxCols
 }
 
 // setSheetStyle 设置工作表样式
@@ -234,12 +245,12 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 
 	headerStyleID, _ := f.NewStyle(headerStyle)
 
-	// 设置数据样式
+	// 设置数据样式（内部内容区域固定开启自动换行）
 	dataStyle, _ := f.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{
 			Horizontal: "left",
 			Vertical:   "top",
-			WrapText:   cfg.Data.WrapText,
+			WrapText:   true,
 		},
 	})
 
@@ -345,13 +356,15 @@ func (g *Generator) setSheetStyle(f *excelize.File, sheetName string, maxCol, ma
 		f.SetRowHeight(sheetName, row, cfg.Data.RowHeight)
 	}
 
-	// 冻结首行
-	f.SetPanes(sheetName, &excelize.Panes{
-		Freeze:      true,
-		XSplit:      1,
-		YSplit:      1,
-		TopLeftCell: "B2",
-	})
+	// 冻结首行首列（可通过 excel.freeze: false 关闭，避免预览中的灰色分隔线）
+	if cfg.Freeze == nil || *cfg.Freeze {
+		f.SetPanes(sheetName, &excelize.Panes{
+			Freeze:      true,
+			XSplit:      1,
+			YSplit:      1,
+			TopLeftCell: "B2",
+		})
+	}
 }
 
 // ConvertCSVToExcel 将单个 CSV 转换为 Excel
@@ -377,7 +390,7 @@ func (g *Generator) ConvertCSVToExcel(csvFile string) error {
 	}
 
 	// 设置样式
-	g.setSheetStyle(f, sheetName, len(records[0]), len(records))
+	g.setSheetStyle(f, sheetName, gridMaxCols(records), len(records))
 
 	// 保存文件
 	baseName := strings.TrimSuffix(filepath.Base(csvFile), ".csv")
