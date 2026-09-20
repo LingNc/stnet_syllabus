@@ -56,7 +56,41 @@ cd ..
 1. 运行`./stnet_syllabus -init` 初始化配置目录 `config/`
 2. 将 API 密钥写入 `config/api.key` 文件
 3. 根据需要修改 `config/config.yaml` 中的配置
-4. 将课表压缩包和映射表放入 `input/` 目录 或者 直接放入 xls 文件（程序会自动检测）
+4. 将课表文件放入 `input/` 目录（格式要求见下方「输入文件格式」）
+
+## 输入文件格式
+
+所有输入的课表必须是**教务系统导出的网页格式 `.xls`**（实质为 HTML）。真 `.xlsx`、Excel 97-2003 二进制格式或截图粘贴的文件无法解析，会被自动跳过并列出需重新收集的名单。
+
+### 批量模式一：收集表导出（多人收集，推荐）
+
+适合腾讯文档/收集表导出的场景，`input/` 中放入：
+
+1. **映射表 xlsx**（收集结果导出）
+   - 列按表头文字自动识别，含「姓名」「学号」「教学安排表」（附件文件名）列即可
+   - 兼容 5 列与 6 列布局（如自动填写的「姓名」列、提交者/提交时间列均不影响）
+2. **课表附件**，两种形式任选或同时存在：
+   - 收集导出的 `zip` 压缩包（放在 `input/` 根目录或任意子文件夹）
+   - 已解压的附件文件夹（`input/` 下的任意子文件夹，名字不限，里面有 `.xls` 即可）
+
+附件**无需重命名**，程序按映射表自动匹配姓名和学号；压缩包与已解压文件夹同时存在时自动去重；重跑时有人重新提交了修正版课表会自动覆盖旧结果，已撤回的自动清理。
+
+### 批量模式二：散装 xls（无映射表）
+
+`input/` 中只有 `.xls` 文件（没有映射表 xlsx 和 zip）时进入直接处理模式：
+
+- 文件内容需包含姓名、学号和学期信息（青果教务系统导出的课表自带，程序从内容中提取并自动重命名）
+- 文件名建议按 `<姓名>_<学号>_<学期码>.xls` 命名，例如 `张三_202401010101_20260.xls`
+  - 学期码为 4 位：年份后两位 + 学期（`0`=第一学期，`1`=第二学期）
+- 文件中学期与配置的 `semester_code` 不一致时会在验证阶段警告
+
+### 单个文件（个人模式）
+
+仅用于给个人生成 ICS 日历，不进入排班流程：
+
+```bash
+./stnet_syllabus -ics-input 张三_202401010101_20260.xls -ics-output 张三.ics
+```
 
 ### 运行
 
@@ -103,63 +137,35 @@ go build -o stnet_syllabus ./cmd
 ### config.yaml
 
 ```yaml
-semester:
-  code: "20251"                    # 学期代码（表示2025-2026第二学期）
-  start_date: "2026-03-02"         # 学期开始日期
-  total_weeks: 21                # 学期总周数
-  exam_review_weeks: [20,21]          # 复习周（不排班）
+globals:
+  organization: "学生网管"          # 组织名称（用于生成 Excel 文件名）
+  campus: "科学"                    # 校区名称
+  semester_code: "20260"            # 学期代码（年份后两位+学期，0=第一学期）
+  semester_start: "2026-09-07"      # 学期第一周周一的日期
+  total_weeks: 21                   # 学期总周数
+  exam_review_weeks: [20,21]        # 复习周（不排班）
 
 ai:
-  base_url: "https://api.deepseek.com/chat/completions"
+  api_mode: "openai"                # openai（默认）或 claude
+  base_url: "https://api.deepseek.com"
   model: "deepseek-chat"
-  concurrency: 5                   # 并发数
-  max_retries: 3                   # 重试次数
-  request_interval: 500            # 请求间隔（毫秒）
+  concurrency: 5                    # 并发数
+  max_retries: 3                    # 重试次数
+  request_interval: 500             # 请求间隔（毫秒）
+  thinking:
+    type: disabled                  # 思考模式开关 enabled | disabled（GLM-4.5+ / DeepSeek）
+    clear_thinking: false
+  request_body:
+    enable_thinking: false          # Qwen 3.6+ 等模型的思考开关
+
+excel:
+  freeze: false                     # 是否冻结首行首列（false 去掉预览中的灰色分隔线）
 
 paths:
   input: "./input"
   output: "./output"
-  ics: "./output/ics"              # ICS 输出目录
+  ics: "./output/ics"               # ICS 输出目录
   # ... 其他路径配置
-```
-
-## 项目结构
-
-```
-stnet_syllabus/
-├── cmd/                 # 命令入口
-├── config/              # 运行时配置（-init 生成，gitignore）
-│   ├── config.yaml
-│   ├── 二维表.prompt
-│   └── api.key
-├── input/               # 输入数据（腾讯文档收集表导出）
-│   ├── *.xls            # 方法一：自动检测如果有xls文件直接读（而不是读zip和xlsx）
-│   ├── *.zip            # 方法二：收集的所有人的青果导出的xls课程表（可以是二维表也可以是列表）
-│   └── *.xlsx           # 方法二：收集的表格（每行姓名、学号和对应的导出课程表文件名）
-├── output/              # 输出数据
-│   ├── ics/             # ICS 日历文件
-│   ├── temp/            # 临时文件
-│   ├── csv_normalized/  # 标准化 CSV
-│   ├── final/           # 最终 Excel 报表
-│   ├── weekly/          # 每周无课表
-│   └── error.log        # 错误日志
-├── scripts/             # Python 数据获取脚本（教务系统自动化）
-│   ├── login.py         # 扫码登录获取 cookies
-│   ├── get_schedule.py  # 官方API导出课表
-│   └── README.md        # 详细使用说明
-├── internal/            # 内部包
-│   ├── preprocess/      # 数据预处理
-│   ├── simplify/        # HTML 精简
-│   ├── validate/        # 数据验证
-│   ├── split/           # 数据拆分
-│   ├── parser/          # 解析器（含 AI 调用）
-│   ├── aggregate/       # 无课表聚合
-│   ├── weekly/          # 周次切片
-│   ├── excel/           # Excel 生成
-│   ├── ics/             # ICS 日历生成
-│   └── config/          # 配置加载
-├── pkg/                 # 公共包
-└── plan/                # 开发计划文档
 ```
 
 ## CLI 参数
